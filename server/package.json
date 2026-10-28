@@ -1,0 +1,17 @@
+{
+  "name": "monster-arena-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "signaling_http.js",
+  "scripts": {
+    "start": "node signaling_http.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
