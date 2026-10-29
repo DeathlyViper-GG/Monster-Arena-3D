@@ -2343,10 +2343,13 @@
   canvas.style.height = window.innerHeight + 'px';
 
   const canvas3d = document.getElementById('game3d');
-  if (canvas3d) {
-    canvas3d.style.width = window.innerWidth + 'px';
-    canvas3d.style.height = window.innerHeight + 'px';
-  }
+if (canvas3d) {
+  canvas3d.width = Math.floor(window.innerWidth * dpr);
+  canvas3d.height = Math.floor(window.innerHeight * dpr);
+
+  canvas3d.style.width = window.innerWidth + 'px';
+  canvas3d.style.height = window.innerHeight + 'px';
+}
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
