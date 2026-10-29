@@ -1802,12 +1802,12 @@ function createCutscene({ canvas, container }) {
   const warden = createWarden();
   scene.add(meadow.group, shard.group, warden.group);
 
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
-  composer.addPass(bloom);
-  const cinematic = new ShaderPass(CinematicShader);
-  composer.addPass(cinematic);
+  // const composer = new EffectComposer(renderer);
+  // composer.addPass(new RenderPass(scene, camera));
+  // const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
+  // composer.addPass(bloom);
+  // const cinematic = new ShaderPass(CinematicShader);
+  // composer.addPass(cinematic);
 
   const state = { stage: 0, time: 0, stageTime: 0, flash: 0 };
   const clock = new THREE.Clock();
@@ -1824,8 +1824,8 @@ function createCutscene({ canvas, container }) {
     camera.fov = aspect < 1.15 ? Math.min(76, 46 / Math.max(aspect, 0.6)) : 46;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
-    composer.setSize(width, height);
-    bloom.setSize(width, height);
+    // composer.setSize(width, height);
+    // bloom.setSize(width, height);
   }
 
   const resizeObserver = new ResizeObserver(resize);
