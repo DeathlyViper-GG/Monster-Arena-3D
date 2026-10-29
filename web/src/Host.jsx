@@ -71,8 +71,7 @@ export default function Host() {
         ref={iframeRef}
         src={`/game.html${qs}`}
         title="Monster Arena"
-        className="fixed inset-0 w-full h-full"
-        style={{ border: 0 }}
+        style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", border: 0 }}
         allow="autoplay; fullscreen; gamepad"
       />
       {casketPlaying && (
