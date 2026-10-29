@@ -1768,7 +1768,7 @@ function disposeScene(scene) {
 
 function createCutscene({ canvas, container }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(1);
   renderer.setClearColor(0x010308, 1);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -1805,6 +1805,7 @@ function createCutscene({ canvas, container }) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
+  bloom.enabled = false;
   composer.addPass(bloom);
   const cinematic = new ShaderPass(CinematicShader);
   composer.addPass(cinematic);
