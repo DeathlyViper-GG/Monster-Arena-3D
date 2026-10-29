@@ -588,10 +588,23 @@
   // ============================================================== RESIZE / RT
   R.resize = function (cssW, cssH, dpr) {
     const gl = R.gl; if (!gl) return;
-    if (cssW) { R.cw = cssW; R.ch = cssH; R.dpr = dpr || R.dpr || 1; } else { cssW = R.cw; cssH = R.ch; }
-    if (!cssW) return;
-    const sc = R.q.scale * (R.dpr || 1) * (R.dynScale || 1);
-    const w = Math.max(64, Math.floor(cssW * sc)), h = Math.max(64, Math.floor(cssH * sc));
+    if (cssW) {
+  R.cw = cssW;
+  R.ch = cssH;
+  R.dpr = dpr || R.dpr || 1;
+} else {
+  cssW = R.canvas.clientWidth || window.innerWidth;
+  cssH = R.canvas.clientHeight || window.innerHeight;
+}
+
+if (!Number.isFinite(cssW) || !Number.isFinite(cssH) || cssH > 10000) {
+  cssW = window.innerWidth;
+  cssH = window.innerHeight;
+}
+
+const sc = R.q.scale * (R.dpr || 1) * (R.dynScale || 1);
+    const w = Math.min(8192, Math.max(64, Math.floor(cssW * sc)));
+    const h = Math.min(8192, Math.max(64, Math.floor(cssH * sc)));
     const key = w + 'x' + h + R.qName;
     if (key === R.sizeKey) return; R.sizeKey = key;
     R.canvas.width = w; R.canvas.height = h; R.W = w; R.H = h; R.aspect = w / h;
