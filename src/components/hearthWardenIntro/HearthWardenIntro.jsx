@@ -1768,7 +1768,7 @@ function disposeScene(scene) {
 
 function createCutscene({ canvas, container }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x010308, 1);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -1805,8 +1805,7 @@ function createCutscene({ canvas, container }) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
-  bloom.enabled = false;
-  composer.addPass(bloom);
+  // composer.addPass(bloom);
   const cinematic = new ShaderPass(CinematicShader);
   composer.addPass(cinematic);
 
@@ -1826,7 +1825,7 @@ function createCutscene({ canvas, container }) {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
-    bloom.setSize(width, height);
+    // bloom.setSize(width, height);
   }
 
   const resizeObserver = new ResizeObserver(resize);
@@ -1893,7 +1892,7 @@ function createCutscene({ canvas, container }) {
 
     updateCamera(time, p1, p2);
 
-    bloom.strength = 0.6 + state.flash * 1.3 + morph * 0.18;
+    // bloom.strength = 0.6 + state.flash * 1.3 + morph * 0.18;
     renderer.toneMappingExposure = 1.06 + state.flash * 0.4;
 
     cinematic.uniforms.uTime.value = time;
@@ -1902,7 +1901,6 @@ function createCutscene({ canvas, container }) {
     cinematic.uniforms.uAberration.value = 0.0013 + state.flash * 0.006 + morph * 0.0012;
     cinematic.uniforms.uGrain.value = 0.028 + state.flash * 0.04;
 
-    cinematic.enabled = false;
     composer.render();
   }
 
@@ -1920,7 +1918,7 @@ function createCutscene({ canvas, container }) {
     renderer.setAnimationLoop(null);
     resizeObserver.disconnect();
     disposeScene(scene);
-    bloom.dispose();
+    // bloom.dispose();
     cinematic.dispose();
     composer.dispose();
     renderer.dispose();
