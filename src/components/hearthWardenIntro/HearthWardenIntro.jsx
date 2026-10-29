@@ -1806,8 +1806,8 @@ function createCutscene({ canvas, container }) {
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
   // composer.addPass(bloom);
-  const cinematic = new ShaderPass(CinematicShader);
-  composer.addPass(cinematic);
+  // const cinematic = new ShaderPass(CinematicShader);
+  // composer.addPass(cinematic);
 
   const state = { stage: 0, time: 0, stageTime: 0, flash: 0 };
   const clock = new THREE.Clock();
@@ -1895,13 +1895,13 @@ function createCutscene({ canvas, container }) {
     // bloom.strength = 0.6 + state.flash * 1.3 + morph * 0.18;
     renderer.toneMappingExposure = 1.06 + state.flash * 0.4;
 
-    cinematic.uniforms.uTime.value = time;
-    cinematic.uniforms.uFlash.value = state.flash * 0.6;
-    cinematic.uniforms.uVignette.value = 0.9 + morph * 0.12;
-    cinematic.uniforms.uAberration.value = 0.0013 + state.flash * 0.006 + morph * 0.0012;
-    cinematic.uniforms.uGrain.value = 0.028 + state.flash * 0.04;
+    // cinematic.uniforms.uTime.value = time;
+    // cinematic.uniforms.uFlash.value = state.flash * 0.6;
+    // cinematic.uniforms.uVignette.value = 0.9 + morph * 0.12;
+    // cinematic.uniforms.uAberration.value = 0.0013 + state.flash * 0.006 + morph * 0.0012;
+    // cinematic.uniforms.uGrain.value = 0.028 + state.flash * 0.04;
 
-    composer.render();
+    renderer.render(scene, camera);
   }
 
   renderer.setAnimationLoop(frame);
@@ -1919,7 +1919,7 @@ function createCutscene({ canvas, container }) {
     resizeObserver.disconnect();
     disposeScene(scene);
     // bloom.dispose();
-    cinematic.dispose();
+    // cinematic.dispose();
     composer.dispose();
     renderer.dispose();
   }
