@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Monster Arena</title>
+
+  <!-- Register asset-retry service worker ASAP so transient connection
+       resets (ERR_HTTP2_PING_FAILED / ERR_CONNECTION_RESET) recover at the
+       network layer without changing the game's image loaders. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(function(){});
+    }
+  </script>
+
+  <!--  REQUIRED FOR RENDER + SCHOOL WIFI -->
+  <script>
+    window.SIGNAL_URL = location.origin;
+    // Normal play: waves start at 1, monsters spawn, boss appears at wave 5.
+  </script>
+  
+<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/home_visuals.css?v=3">
+<link rel="stylesheet" href="css/abyss_bg.css?v=2">
+<link rel="stylesheet" href="css/realm_select.css?v=2">
+
+<style>
+    @property --glyphHue {
+    syntax: '<angle>';
+    inherits: true;
+    initial-value: 200deg;
+  }
+  .glyph-card {
+    width:min(980px, 94vw);
+    position: relative;
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(130,170,255,0.10), rgba(0,0,0,0) 60%),
+      rgba(10,13,22,0.86);
+    border: 1px solid rgba(180,220,255,0.10);
+    border-radius: 22px;
+    overflow: hidden;
+  }
+  .glyph-card::before{
+    content:"";
+    position:absolute; inset:-2px;
+    border-radius: 22px;
+    padding: 2px;
+    background: conic-gradient(from var(--glyphHue, 200deg),
+      #ff6a2a, #9fe3ff, #c066ff, #4fd3ff, #7dffa3, #ff6a2a);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0.55;
+    animation: glyphBorderSpin 10s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes glyphBorderSpin {
+    to { --glyphHue: 560deg; }
+  }
+  .glyph-card h2{
+    text-align:center;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 22px;
+    margin: 2px 0 6px;
+    background: linear-gradient(90deg, #fff, #cfe9ff 45%, #ffd7a3 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 24px rgba(160,210,255,0.25);
+  }
+  .glyph-timer { opacity:0.85; margin:6px 0 14px; }
+  #glyphCanvas { 
+    width:min(640px, 92vw);
+    height:auto;
+    display:block;
+    margin: 10px auto 12px;
+    border-radius: 18px;
+    background: radial-gradient(circle at 50% 45%, rgba(80,110,160,0.25), rgba(5,8,16,0.7) 70%);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.45) inset, 0 0 40px rgba(120,170,255,0.10), 0 10px 22px rgba(0,0,0,0.25);
+    border: 1px solid rgba(180,220,255,0.14);
+  }
+  .glyph-info{
+    margin-top:10px;
+    padding:14px 16px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(20,26,42,0.75), rgba(10,14,24,0.6));
+    border: 1px solid rgba(180,220,255,0.14);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .glyph-info h3 {
+    margin:0 0 6px;
+    letter-spacing:0.03em;
+    color: #eaf4ff;
+    text-shadow: 0 0 14px rgba(160,210,255,0.35);
+  }
+  .glyph-info p { margin:0 0 10px; opacity:0.92; line-height:1.4; }
+  .glyph-row{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+  }
+  .chip.small {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(180,220,255,0.18);
+  }
+  #glyphEnchant.bigBtn{
+    position: relative;
+    background: linear-gradient(180deg, #2a1a3a, #151a29);
+    border: 1px solid rgba(255,220,150,0.45);
+    box-shadow: 0 6px 22px rgba(255,180,90,0.35), 0 0 0 rgba(120,180,255,0.5), inset 0 0 12px rgba(255,200,120,0.18);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #ffe9c4;
+    text-shadow: 0 0 10px rgba(255,200,120,0.6);
+    overflow: hidden;
+  }
+  #glyphEnchant.bigBtn::before{
+    content:""; position:absolute; inset:-1px; border-radius:8px; padding:1px;
+    background: conic-gradient(from var(--glyphHue,200deg), #ff6a2a, #ffd7a3, #c066ff, #4fd3ff, #7dffa3, #ff6a2a);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0.9; animation: glyphBorderSpin 6s linear infinite; pointer-events:none;
+  }
+  #glyphEnchant.bigBtn:not(:disabled):hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(255,190,100,0.55), 0 0 26px rgba(255,200,120,0.4);
+    filter: brightness(1.1);
+  }
+  #glyphEnchant.bigBtn:disabled{
+    background: linear-gradient(180deg, #3a4258, #2a3040);
+    box-shadow: none; opacity: 0.55;
+  }
+  #glyphEnchant.bigBtn:disabled::before{ opacity:0.25; }
+  .glyph-essence{
+    display:inline-flex; align-items:center; gap:6px;
+    background: linear-gradient(180deg, rgba(60,40,10,0.6), rgba(30,22,8,0.5));
+    border: 1px solid rgba(255,210,120,0.55);
+    box-shadow: 0 0 14px rgba(255,190,90,0.25), inset 0 0 8px rgba(255,200,120,0.12);
+    color: #ffe6b0; text-shadow: 0 0 8px rgba(255,200,120,0.6); font-weight: 900; letter-spacing:0.04em;
+  }
+  .glyph-hint{
+    text-align:center; margin: 2px 0 8px; font-size: 13px; letter-spacing: 0.02em;
+    color: #cfe1ff; opacity: 0.9; text-shadow: 0 0 8px rgba(120,180,255,0.3);
+  }
+  #bossBar{
+    position:fixed; top:64px; left:50%; transform:translateX(-50%);
+    width:min(560px,86vw); z-index:20; display:none; pointer-events:none;
+    padding:8px 14px 10px; border-radius:14px;
+    background:linear-gradient(180deg,rgba(12,8,18,.82),rgba(6,4,12,.78));
+    border:1px solid var(--bb-accent,#ff5a3a);
+    box-shadow:0 8px 26px rgba(0,0,0,.5),0 0 24px var(--bb-accent,#ff5a3a);
+  }
+  #bossBar.show{display:block;animation:bbIn .25s ease-out;}
+  @keyframes bbIn{from{transform:translateX(-50%) translateY(-8px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+  #bossName{font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;
+    color:#fff;text-align:center;margin-bottom:5px;text-shadow:0 0 12px var(--bb-accent,#ff5a3a);}
+  #bossTrack{position:relative;height:14px;border-radius:8px;overflow:hidden;
+    background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.18);}
+  #bossFill{position:absolute;inset:0;width:100%;border-radius:8px;
+    background:linear-gradient(90deg,var(--bb-accent,#ff5a3a),#ffcf6a);
+    box-shadow:0 0 12px var(--bb-accent,#ff5a3a) inset;transition:width .12s linear;}
+  #bossPhase{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;
+    font-size:10px;letter-spacing:.12em;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 2px rgba(0,0,0,.9);}
+</style>
+<style>
+/* ===== ANIMATED SIDE NAV ===== */
+#overlayIntro{ padding-left:88px; }
+.side-nav{
+  position:fixed; top:0; left:0; height:100vh; width:88px; z-index:30;
+  display:flex; flex-direction:column; gap:7px; padding:12px 8px 10px;
+  background:linear-gradient(180deg, rgba(12,9,22,.94), rgba(8,6,16,.97));
+  border-right:1px solid rgba(150,90,240,.28);
+  box-shadow:6px 0 30px rgba(0,0,0,.55), inset -1px 0 0 rgba(90,210,255,.06);
+  backdrop-filter:blur(8px); overflow:hidden;
+}
+.side-nav::before{
+  content:""; position:absolute; top:0; left:0; width:3px; height:100%;
+  background:linear-gradient(180deg,#c066ff,#5ad2ff,#ff5a3c,#c066ff);
+  background-size:100% 300%; opacity:.9;
+  animation:side-accent 8s ease-in-out infinite;
+}
+@keyframes side-accent{ 0%,100%{background-position:0% 0%} 50%{background-position:0% 100%} }
+.side-nav::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(60% 40% at 50% 0%, rgba(160,110,255,.18), transparent 70%);
+  animation:side-breathe 5s ease-in-out infinite;
+}
+@keyframes side-breathe{ 0%,100%{opacity:.5} 50%{opacity:1} }
+
+.side-nav-head{ display:flex; align-items:center; justify-content:center; padding:1px 0 6px; }
+.side-logo{ font-size:24px; filter:drop-shadow(0 0 10px rgba(160,110,255,.8)); animation:side-pulse 3.4s ease-in-out infinite; }
+@keyframes side-pulse{ 0%,100%{transform:scale(1) rotate(0)} 50%{transform:scale(1.14) rotate(8deg)} }
+
+.side-balance{ display:flex; justify-content:center; padding:0 2px; min-height:28px; }
+
+.side-nav-list{ display:flex; flex-direction:column; gap:7px; flex:1; min-height:0; overflow-y:auto; margin-top:2px; padding-right:2px; }
+.side-nav-list::-webkit-scrollbar{ width:4px; }
+.side-nav-list::-webkit-scrollbar-thumb{ background:rgba(160,110,255,.4); border-radius:4px; }
+.side-nav-list::-webkit-scrollbar-track{ background:transparent; }
+.side-item{
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  padding:7px 4px; border-radius:13px; cursor:pointer; text-decoration:none; overflow:hidden;
+  background:linear-gradient(180deg, rgba(22,17,38,.7), rgba(12,9,22,.7));
+  border:1px solid rgba(120,90,200,.28); color:#cabef5;
+  font-weight:700; font-size:9px; letter-spacing:.04em; text-align:center;
+  box-shadow:inset 0 0 0 1px rgba(90,210,255,.05);
+  opacity:0; transform:translateX(-22px);
+  animation:side-in .55s cubic-bezier(.22,1,.36,1) forwards;
+  transition:color .25s ease, border-color .25s ease, box-shadow .25s ease, transform .25s ease, filter .25s ease;
+}
+.side-item::before{
+  content:""; position:absolute; inset:0; border-radius:13px; padding:1px;
+  background:conic-gradient(from 0deg, #c066ff, #5ad2ff, #ff5a3c, #7dffa3, #c066ff);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  opacity:0; transition:opacity .25s ease;
+  animation:side-rotate 6s linear infinite;
+}
+@keyframes side-rotate{ to{ transform:rotate(360deg) } }
+.side-item:nth-child(1){ animation-delay:.06s }
+.side-item:nth-child(2){ animation-delay:.12s }
+.side-item:nth-child(3){ animation-delay:.18s }
+.side-item:nth-child(4){ animation-delay:.24s }
+.side-item:nth-child(5){ animation-delay:.30s }
+.side-item:nth-child(6){ animation-delay:.36s }
+.side-item:nth-child(7){ animation-delay:.42s }
+.side-item:nth-child(8){ animation-delay:.48s }
+@keyframes side-in{ to{ opacity:1; transform:translateX(0) } }
+
+.side-item .si-ico{ font-size:20px; line-height:1; filter:drop-shadow(0 0 6px rgba(160,110,255,.5)); transition:transform .2s ease, filter .2s ease; animation:side-ico-glow 4s ease-in-out infinite; }
+.side-item:nth-child(1) .si-ico{ animation-delay:0s }
+.side-item:nth-child(2) .si-ico{ animation-delay:.4s }
+.side-item:nth-child(3) .si-ico{ animation-delay:.8s }
+.side-item:nth-child(4) .si-ico{ animation-delay:1.2s }
+.side-item:nth-child(5) .si-ico{ animation-delay:1.6s }
+.side-item:nth-child(6) .si-ico{ animation-delay:2.0s }
+.side-item:nth-child(7) .si-ico{ animation-delay:2.4s }
+.side-item:nth-child(8) .si-ico{ animation-delay:2.8s }
+@keyframes side-ico-glow{ 0%,100%{ filter:drop-shadow(0 0 5px rgba(160,110,255,.4)) } 50%{ filter:drop-shadow(0 0 11px rgba(160,110,255,.85)) } }
+
+.side-item:hover{ color:#fff; border-color:rgba(160,110,255,.9); box-shadow:0 0 22px rgba(160,90,255,.55), inset 0 0 14px rgba(120,180,255,.2); transform:translateX(3px); filter:brightness(1.08); }
+.side-item:hover::before{ opacity:1; }
+.side-item:hover .si-ico{ transform:translateY(-3px) scale(1.18); filter:drop-shadow(0 0 14px rgba(160,110,255,1)) drop-shadow(0 0 22px rgba(90,210,255,.7)); animation:none; }
+.side-item::after{
+  content:""; position:absolute; left:-1px; top:50%; transform:translateY(-50%); height:0; width:3px; border-radius:3px;
+  background:linear-gradient(180deg,#c066ff,#5ad2ff); box-shadow:0 0 10px rgba(120,180,255,.9);
+  transition:height .22s ease;
+}
+.side-item:hover::after{ height:68%; }
+.side-item:active{ transform:translateX(1px) scale(.97); }
+
+.side-account{ margin-top:auto; border-color:rgba(90,210,255,.55); background:linear-gradient(180deg, rgba(20,32,50,.78), rgba(10,18,30,.78)); box-shadow:inset 0 0 12px rgba(90,210,255,.14); animation:side-in .55s cubic-bezier(.22,1,.36,1) .48s forwards, side-acct-glow 4s ease-in-out 1s infinite; }
+.side-account .si-ico{ filter:drop-shadow(0 0 7px rgba(90,210,255,.7)); }
+.side-account:hover{ border-color:rgba(90,210,255,.95); box-shadow:0 0 26px rgba(90,210,255,.6), inset 0 0 18px rgba(90,210,255,.28); }
+@keyframes side-acct-glow{ 0%,100%{ box-shadow:inset 0 0 10px rgba(90,210,255,.1), 0 0 0 rgba(90,210,255,0) } 50%{ box-shadow:inset 0 0 16px rgba(90,210,255,.24), 0 0 16px rgba(90,210,255,.4) } }
+
+.side-foot{ display:flex; justify-content:center; padding-top:5px; min-height:26px; flex:0 0 auto; }
+.side-chip{
+  display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:999px;
+  background:linear-gradient(180deg, rgba(10,18,30,.9), rgba(6,12,22,.85));
+  border:1px solid rgba(0,250,255,.55); box-shadow:0 0 12px rgba(0,250,255,.25), inset 0 0 8px rgba(0,250,255,.1);
+  color:#eafcff; font-weight:800; font-size:11px; letter-spacing:.04em; text-decoration:none;
+  transition:box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+  animation:side-chip-pulse 3.5s ease-in-out infinite;
+}
+.side-chip:hover{ transform:translateY(-1px); border-color:rgba(0,250,255,.95); box-shadow:0 0 20px rgba(0,250,255,.5), inset 0 0 12px rgba(0,250,255,.2); }
+@keyframes side-chip-pulse{ 0%,100%{ box-shadow:0 0 10px rgba(0,250,255,.2), inset 0 0 8px rgba(0,250,255,.08) } 50%{ box-shadow:0 0 18px rgba(0,250,255,.45), inset 0 0 12px rgba(0,250,255,.16) } }
+
+/* ===== ACCOUNT PANEL ===== */
+#overlayAccount{ place-items:center; }
+.account-card{
+  width:min(560px,94vw); padding:26px 28px;
+  background:linear-gradient(180deg, rgba(16,12,28,.96), rgba(8,6,16,.97));
+  border:1px solid rgba(150,90,240,.34);
+  box-shadow:0 24px 70px rgba(0,0,0,.72), 0 0 50px rgba(140,80,220,.22);
+  border-radius:20px;
+}
+.account-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.account-head h2{
+  margin:0; letter-spacing:.06em; font-size:22px;
+  background:linear-gradient(90deg,#fff,#c066ff 60%,#5ad2ff);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:0 0 22px rgba(160,110,255,.3);
+}
+.account-body{ display:flex; flex-direction:column; gap:14px; }
+.account-status{ display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:14px;
+  background:linear-gradient(180deg,rgba(22,17,38,.7),rgba(12,9,22,.7)); border:1px solid rgba(120,90,200,.3); }
+.account-avatar{ width:54px; height:54px; border-radius:50%; display:grid; place-items:center; font-size:26px;
+  background:radial-gradient(circle, rgba(160,110,255,.45), rgba(12,9,22,.6));
+  border:1px solid rgba(160,110,255,.5); box-shadow:0 0 18px rgba(160,90,255,.4); flex:0 0 auto; }
+.account-name{ font-size:18px; font-weight:800; color:#e8e0ff; }
+.account-email{ font-size:12px; color:#9fd2ff; opacity:.85; margin-top:2px; }
+.account-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.stat-tile{ padding:12px 14px; border-radius:12px;
+  background:linear-gradient(180deg,rgba(22,17,38,.6),rgba(12,9,22,.6));
+  border:1px solid rgba(120,90,200,.24); transition:border-color .2s ease, box-shadow .2s ease; }
+.stat-tile:hover{ border-color:rgba(160,110,255,.5); box-shadow:0 0 16px rgba(160,90,255,.25); }
+.stat-tile .st-label{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9fd2ff; opacity:.85; }
+.stat-tile .st-val{ font-size:20px; font-weight:900; color:#e8e0ff; margin-top:2px; }
+.stat-tile .st-sub{ font-size:11px; color:#b9b2e0; opacity:.8; margin-top:2px; }
+.account-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.account-actions .btn{ flex:1; min-width:120px; }
+.account-actions a{ text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+
+@media (max-width:760px){
+  #overlayIntro{ padding-left:0; padding-bottom:74px; }
+  .side-nav{ top:auto; bottom:0; left:0; width:100vw; height:auto; flex-direction:row; padding:7px 6px; gap:6px;
+    border-right:none; border-top:1px solid rgba(150,90,240,.28); overflow-x:auto; }
+  .side-nav::before{ top:0; left:0; width:100%; height:3px; }
+  .side-nav-head, .side-balance, .side-foot{ display:none; }
+  .side-nav-list{ flex-direction:row; flex:1; gap:6px; }
+  .side-item{ min-width:66px; animation-name:side-in-b; }
+  @keyframes side-in-b{ to{ opacity:1; transform:translateY(0) } }
+  .side-item{ transform:translateY(20px); }
+  .side-account{ margin-top:0; }
+}
+</style>
+
+</head>
+<body>
+  <!-- BOOT LOADING SCREEN -->
+<div id="overlayBoot" class="overlay boot-overlay" style="display:grid;">
+  <div class="boot-card">
+    <h1 class="boot-title">MONSTER ARENA</h1>
+
+    <div class="boot-spinner"></div>
+
+    <!-- REAL progress bar -->
+    <div class="boot-progress">
+      <div id="bootProgressFill"></div>
+    </div>
+
+    <p id="bootText" class="boot-text">Initializing…</p>
+  </div>
+</div>
+
+<canvas id="game" tabindex="0" aria-label="Monster Arena Game"></canvas>
+<canvas id="game3d" aria-hidden="true" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:0"></canvas>
+
+<div class="ui">
+  <div class="bar">
+    <div class="hud">
+      <div class="stat"><span>HP</span>
+        <div class="hb"><span id="hpFill" style="width:100%"></span></div>
+      </div>
+      <div class="stat">Ammo
+        <div class="ammo"><span id="ammoFill" style="width:100%"></span></div>
+        <span id="ammoText" class="chip">15 / 45</span>
+      </div>
+      <div class="stat">Weapon <span id="weaponName" class="chip">Pistol</span></div>
+      <div class="buffBar">
+        <div id="buffSpeed" class="buff hidden">
+          <span class="icon">⚡</span>
+          <span class="val"></span>
+        </div>
+
+        <div id="buffShield" class="buff hidden">
+          <span class="icon">🛡️</span>
+          <span class="val"></span>
+        </div>
+      </div>
+      <div class="stat pve-only">Wave <span id="wave" class="chip">1</span></div>
+      <div class="stat pve-only">Score <span id="score" class="chip">0</span></div>
+      <div class="stat pve-only">Best <span id="best" class="chip">0</span></div>
+      <div class="stat">Shield <span id="shield" class="chip">0</span></div>
+      <div class="stat">Speed <span id="spd" class="chip">1.00x</span></div>
+      <div class="stat">Level <span id="lvl" class="chip">—</span></div>
+      <span id="lobbyBadge" class="chip" style="margin-left:8px; display:none;">Lobby —</span>
+      <!-- PvE Leaderboard -->
+      <div class="stat pve-only leaderboardStat">
+        <div class="lbTitle">Leaderboard</div>
+        <div id="pveLeaderboard" class="leaderboard"></div>
+      </div>
+    </div>
+    <div class="corner">
+      <button class="btn" id="btnPause">⏸️ Pause</button>
+      <button class="btn" id="btnRestart">🔄 Restart</button>
+      <button class="btn" id="btnHome">🏠 Home</button>
+      <button class="btn" id="btnHelp">❓ Help</button>
+      <button class="btn" id="btnSettings">⚙️ Settings</button>
+      <button class="btn" id="btnExit" style="display:none;">🚪 Exit</button>
+    </div>
+  </div>
+</div>
+
+<div class="minimap" id="minimapWrap">
+  <canvas id="mini" width="150" height="150" aria-label="Minimap"></canvas>
+</div>
+
+<!--  Mobile action buttons (NOT on minimap anymore) -->
+<div class="mobile-actions" id="mobileActions">
+  <button class="mob-btn" id="btnDash">DASH</button>
+  <button class="mob-btn" id="btnMelee">MELEE</button>
+</div>
+<div id="netStatus" class="net-status" title="Network status"></div>
+
+<!-- BOSS HEALTH BAR -->
+<div id="bossBar">
+  <div id="bossName">Boss</div>
+  <div id="bossTrack"><div id="bossFill"></div><div id="bossPhase"></div></div>
+</div>
+
+<!-- MAIN INTRO -->
+<div id="overlayIntro" class="overlay arena-intro" style="display:grid;">
+  <div class="arena-intro-bg" aria-hidden="true">
+    <div class="arena-fog"></div>
+    <div class="arena-glow"></div>
+    <div class="arena-vignette"></div>
+    <div class="arena-embers">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <!-- HV BACKDROP (ported visuals) -->
+  <div id="hvArena3D" class="hv-arena3d" aria-hidden="true"></div>
+  <canvas id="hvParticles" class="hv-particles" aria-hidden="true"></canvas>
+  <div class="hv-scanlines" aria-hidden="true"></div>
+  <div id="hvCursor" class="hv-cursor" aria-hidden="true"></div>
+
+  <!-- ANIMATED SIDE NAV -->
+  <aside id="sideNav" class="side-nav" aria-label="Menu">
+    <div class="side-nav-head"><img class="side-logo" src="https://media.base44.com/images/public/6ad27d6995813fb4230b1b65/d1b75cdc8_ElectricBlueArcaneRuneMedallion1.png" alt="" style="width:40px;height:40px;border-radius:50%;mix-blend-mode:screen;object-fit:cover"></div>
+    <div class="side-balance arena-aux" id="runeBadgeHost"></div>
+    <nav class="side-nav-list">
+      <button class="side-item" id="introCustomize" title="Customize"><span class="si-ico">🎨</span><span class="si-label">Customize</span></button>
+      <button class="side-item" id="introShop" title="Shop"><span class="si-ico">🛒</span><span class="si-label">Shop</span></button>
+      <button class="side-item" id="introBuildings" title="Buildings"><span class="si-ico">🏰</span><span class="si-label">Buildings</span></button>
+      <button class="side-item" id="introHelp" title="Help"><span class="si-ico">❓</span><span class="si-label">Help</span></button>
+      <button class="side-item" id="introSettings" title="Settings"><span class="si-ico">⚙️</span><span class="si-label">Settings</span></button>
+      <a class="side-item" href="/about" target="_top" title="About"><span class="si-ico">ℹ️</span><span class="si-label">About</span></a>
+      <a class="side-item" href="/contact" target="_top" title="Contact"><span class="si-ico">✉️</span><span class="si-label">Contact</span></a>
+      <button class="side-item side-account" id="introAccount" title="Account"><span class="si-ico">👤</span><span class="si-label">Account</span></button>
+    </nav>
+    <div class="side-foot" id="accountSlot"></div>
+  </aside>
+
+  <div class="card intro-card arena-card arena-judder">
+    <div class="hv-runes" aria-hidden="true"></div>
+    <div class="hv-halo" aria-hidden="true"></div>
+    <canvas id="hvParticlesInt" class="hv-particles-int" aria-hidden="true"></canvas>
+    <div class="hv-seal" aria-hidden="true">
+      <div class="hv-seal-ticks"></div>
+      <div class="hv-seal-ticks rev"></div>
+      <div class="hv-seal-spokes"></div>
+      <div class="hv-seal-spokes rev"></div>
+      <div class="hv-seal-ring"><div class="hv-seal-eye"><div class="hv-seal-ball"><div id="hvSealEye" class="hv-seal-iris"><div class="hv-seal-pupil"></div></div><div class="hv-seal-shade"></div><div class="hv-seal-rim"></div></div></div></div>
+    </div>
+    <div class="hv-crest" aria-hidden="true">
+      <div class="hv-wing l"></div>
+      <div class="hv-wing r"></div>
+    </div>
+    <h1 class="intro-title title-cursed" data-text="Monster Arena">Monster Arena</h1>
+    <p class="arena-subtitle">
+      Survive escalating waves of intelligent enemies.<br>
+      Explore buildings, uncover hidden chests, and adapt as hazards become lethal.
+    </p>
+
+    <div class="row" style="justify-content:center; margin-top:22px;">
+      <button class="btn bigBtn portal-btn" id="btnIntroOffline"><span class="portal-icon">💻</span><span class="portal-label">Offline</span></button>
+      <button class="btn bigBtn portal-btn" id="btnIntroSingle"><span class="portal-icon">🧍</span><span class="portal-label">Singleplayer</span></button>
+      <button class="btn bigBtn portal-btn" id="btnIntroMulti"><span class="portal-icon">👥</span><span class="portal-label">Multiplayer</span></button>
+      <button class="btn bigBtn portal-btn" id="introStory"><span class="portal-icon">📖</span><span class="portal-label">Story</span></button>
+    </div>
+
+  </div>
+  <div id="hvStrike" class="hv-strike" aria-hidden="true"></div>
+</div>
+
+<!-- SINGLE PLAYER -->
+<!-- SINGLE PLAYER -->
+ <!-- OFFLINE -->
+<div id="overlayOffline" class="overlay realm-select">
+  <main class="rs-main">
+    <header class="rs-header">
+      <h1 class="rs-title">Offline Mode</h1>
+      <p class="rs-subtitle">Fight with or against bots in ULTIMATE BATTLES.</p>
+    </header>
+    <div class="rs-toolbar">
+      <div class="rs-modes" id="offlineModeRail">
+        <button class="rs-mode rs-mode--pve" type="button" id="btnOfflinePVE" data-mode="pve"><span class="rs-mode-ico">🤝</span><span class="rs-mode-name">PVE</span><span class="rs-mode-tag">Co-op survival</span></button>
+        <button class="rs-mode rs-mode--pvp" type="button" id="btnOfflinePVP" data-mode="pvp"><span class="rs-mode-ico">⚔️</span><span class="rs-mode-name">PVP</span><span class="rs-mode-tag">Free-for-all</span></button>
+        <button class="rs-mode rs-mode--teams" type="button" id="btnOfflineTeams" data-mode="teams"><span class="rs-mode-ico">🏰</span><span class="rs-mode-name">Teams</span><span class="rs-mode-tag">Siege the giants</span></button>
+        <button class="rs-mode rs-mode--ctf" type="button" id="btnOfflineCTF" data-mode="ctf"><span class="rs-mode-ico">🚩</span><span class="rs-mode-name">Capture the Flag</span><span class="rs-mode-tag">First to 5 caps</span></button>
+      </div>
+      <div class="rs-mode-label" id="offlineModeLabel">PVE</div>
+    </div>
+    <div class="level-strip rs-grid" id="offlineLevelStrip"></div>
+    <footer class="rs-footer">
+      <button class="rs-back" type="button" id="backFromOffline"><span class="rs-arrow">←</span> Back</button>
+      <div class="rs-selected">
+        <span class="rs-sel-label">selected realm</span>
+        <span class="rs-sel-name" id="offlineSelectedName">1. Meadow</span>
+        <span class="rs-sel-badge" id="offlineSelectedBadge">Baseline</span>
+      </div>
+    </footer>
+  </main>
+</div>
+<div id="overlaySingle" class="overlay realm-select">
+  <main class="rs-main">
+    <header class="rs-header">
+      <h1 class="rs-title">Singleplayer</h1>
+      <p class="rs-subtitle">Survive escalating waves of monsters across five cursed realms. Each level introduces new hazards, smarter enemies, and deadlier pressure.</p>
+    </header>
+    <div class="level-strip rs-grid" id="singleLevelStrip"></div>
+    <footer class="rs-footer">
+      <button class="rs-back" type="button" id="backFromSingle"><span class="rs-arrow">←</span> Back</button>
+      <div class="rs-selected">
+        <span class="rs-sel-label">selected realm</span>
+        <span class="rs-sel-name" id="singleSelectedName">1. Meadow</span>
+        <span class="rs-sel-badge" id="singleSelectedBadge">Baseline</span>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- MULTIPLAYER -->
+<div id="overlayHome" class="overlay">
+  <div class="card">
+    <h2>👥 Multiplayer</h2>
+
+    <div class="row" style="margin-top:8px;">
+      <input id="multiNick" class="input" placeholder="Username" style="width:180px;">
+      <button class="btn" id="joinMultiBtn">▶ Join Lobby</button>
+      <span id="multiLobbyId" class="chip">—</span>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      <div class="modeCard" id="modePvE">
+        <h3>🤝 PvE</h3>
+        <p>Co‑op survival. Share waves and support each other.</p>
+      </div>
+      <div class="modeCard" id="modePvP">
+        <h3>⚔ PvP</h3>
+        <p>Free‑for‑all. One life. Last player standing wins.</p>
+      </div>
+    </div>
+
+    <!-- LEVELS APPEAR HERE (MULTIPLAYER) -->
+    <div class="level-strip" id="multiLevelStrip"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <button class="btn" id="backFromMulti">⬅ Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- GLYPH UPGRADE OVERLAY -->
+<div id="overlayGlyphs" class="overlay" style="display:none;">
+  <div class="card glyph-card">
+    <h2>Choose Your Glyph</h2>
+    <div class="glyph-row">
+      <p class="glyph-timer">Wave resumes in <span id="glyphTimer">15</span>s</p>
+      <span class="chip small glyph-essence">✦ Essence: <span id="glyphEssence">0</span></span>
+    </div>
+    <p class="glyph-hint">Tap a glyph to inspect it, then press <b>Enchant</b> to unlock its power.</p>
+
+    <canvas id="glyphCanvas" width="640" height="640"></canvas>
+
+    <div class="glyph-info">
+      <h3 id="glyphTitle">—</h3>
+      <p id="glyphDesc">Select a path to view its core effect. Enchant to confirm.</p>
+      <div class="glyph-row">
+        <span class="chip small">Cost: <span id="glyphCost">—</span></span>
+        <button class="btn bigBtn" id="glyphEnchant" disabled>ENCHANT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- PAUSE / GAME OVER -->
+<div id="overlayPause" class="overlay">
+  <div class="card">
+    <h2>⏸️ Paused</h2>
+    <p>Take a breather. Enemies pause too.</p>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="resumeBtn">▶️ Resume</button>
+      <button class="btn" id="restartBtn2">🔄 Restart</button>
+      <button class="btn" id="homeBtn2">🏠 Home</button>
+      <button class="btn" id="settingsBtn2">⚙️ Settings</button>
+      <button class="btn" id="helpBtn2">❓ Help</button>
+    </div>
+  </div>
+</div>
+
+<!-- VICTORY (PvP) -->
+<div id="overlayVictory" class="overlay">
+  <div class="card victory-card">
+    <h2 class="victory-title">🏆 VICTORY!</h2>
+    <p class="intro-text" id="victorySubtitle">Every bot is down. You're the last one standing.</p>
+    <div class="row" style="justify-content:center; margin-top:10px;">
+      <span class="chip">Bots Eliminated: <span id="victoryBotsKilled">0</span></span>
+      <span class="chip">Time Survived: <span id="victoryTime">0:00</span></span>
+    </div>
+    <div class="row" style="justify-content:center; margin-top:16px;">
+      <button class="btn bigBtn" id="victoryRestartBtn">🔄 Play Again</button>
+      <button class="btn" id="victoryHomeBtn">🏠 Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUILDING CODEX -->
+<div id="overlayBuildings" class="overlay">
+  <div class="card">
+    <h2>🏰 Building Codex</h2>
+    <p class="intro-text">Themed structures hidden across the arenas. Open their chests to add them to your codex.</p>
+    <div id="buildingCatalog" class="buildingCatalog"></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="closeBuildings">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP -->
+<div id="overlayHelp" class="overlay">
+  <div class="card">
+    <h2>❓ How to Play</h2>
+    <div class="grid">
+      <div>
+        <h3>Controls</h3>
+        <p><code class="k">W A S D</code> / <code class="k">Arrows</code> to move • Aim with mouse • <code class="k">Click</code> shoot<br/>
+        <code class="k">R</code> reload • <code class="k">Q/E</code> switch weapon • <code class="k">Space</code> dash • <code class="k">Esc</code> pause • <code class="k">H</code> help</p>
+        <p>Mobile: left stick to move • right round button to fire • <b>WPN</b> to switch.</p>
+      </div>
+      <div>
+        <h3>What’s new</h3>
+        <ul>
+          <li>Enter <b>buildings</b> via doorways; some hide <b>chests</b> with ammo/powerups/health/shield.</li>
+          <li>Chests are <b>hidden until you’re inside</b> the building.</li>
+          <li>Enemies act in <b>squads</b> with roles (leader/flanker/support), share <b>alerts</b>, react to <b>gunshots</b>, and <b>chase</b> within a detection radius.</li>
+          <li>Later levels add lethal hazards (sand/chasm/lava/void) that kill <b>everyone</b> on touch.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="closeHelp">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="overlaySettings" class="overlay">
+  <div class="card">
+    <h2>⚙️ Settings</h2>
+    <div class="grid">
+      <div>
+        <div class="row"><span class="label">Base difficulty scaler</span>
+          <select id="selDiff" class="select">
+            <option value="0.9">Easy</option>
+            <option value="1.0" selected>Normal</option>
+            <option value="1.2">Hard</option>
+            <option value="1.5">Insane</option>
+          </select>
+        </div>
+        <div class="row"><span class="label">Sound</span>
+          <select id="selSfx" class="select"><option value="1" selected>On</option><option value="0">Off</option></select>
+        </div>
+        <div class="row"><span class="label">Music</span>
+          <select id="selMusic" class="select"><option value="1" selected>On</option><option value="0">Off</option></select>
+        </div>
+      </div>
+      <div>
+        <div class="row"><span class="label">Sensitivity</span>
+          <input id="rngSens" class="range" type="range" min="0.6" max="1.6" value="1" step="0.05" />
+          <span id="sensVal" class="chip">1.00x</span>
+        </div>
+        <div class="row"><span class="label">Opacity UI</span>
+          <input id="rngUI" class="range" type="range" min="0.4" max="1" value="1" step="0.05" />
+          <span id="uiVal" class="chip">100%</span>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="closeSettings">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING / COUNTDOWN -->
+<div id="overlayLoading" class="overlay" style="display:none;">
+  <div class="card">
+    <h2>⏳ Preparing match</h2>
+    <p id="loadingText">Joining lobby…</p>
+    <div id="lobbyPlayers" style="margin-top:10px; font-size:12px; line-height:1.3;"></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="cancelLoading">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMIZE -->
+<div id="overlayCustomize" class="overlay">
+  <div class="card">
+<h2>🎨 Customize</h2>
+
+<!-- TAB BUTTONS -->
+<div class="tabBar">
+  <button class="tabBtn active" id="tabPlayerBtn">Player</button>
+  <button class="tabBtn" id="tabGunsBtn">Guns</button>
+  <button class="tabBtn" id="tabMeleeBtn">Melee</button>
+</div>
+
+<!-- PLAYER TAB -->
+<div id="playerTab" class="tabContent" style="display:block;">
+  <p>Select a <b>design</b> and a <b>color</b>. Designs unlock as you reach higher waves.</p>
+  <div id="skinGrid" class="skinGrid" aria-label="Designs"></div>
+</div>
+
+<!-- GUNS TAB -->
+<div id="gunTab" class="tabContent" style="display:none;">
+  <div class="gunSection">
+    <div class="gunSectionTitle">Pistols</div>
+    <div id="pistolGrid" class="gunSkinGrid" aria-label="Pistol Skins"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">Rifles</div>
+    <div id="rifleGrid" class="gunSkinGrid" aria-label="Rifle Skins"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">Shotguns</div>
+    <div id="shotgunGrid" class="gunSkinGrid" aria-label="Shotgun Skins"></div>
+  </div>
+  <div id="extraGunsHost"></div>
+</div>
+<div id="meleeTab" class="tabContent" style="display:none;">
+  <div class="gunSection">
+    <div class="gunSectionTitle">Common</div>
+    <div id="meleeCommonGrid" class="gunSkinGrid" aria-label="Common Melee"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">Rare</div>
+    <div id="meleeRareGrid" class="gunSkinGrid" aria-label="Rare Melee"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">Epic</div>
+    <div id="meleeEpicGrid" class="gunSkinGrid" aria-label="Epic Melee"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">Legendary</div>
+    <div id="meleeLegendaryGrid" class="gunSkinGrid" aria-label="Legendary Melee"></div>
+  </div>
+  <div class="gunSection" style="margin-top:10px;">
+    <div class="gunSectionTitle">God</div>
+    <div id="meleeGodGrid" class="gunSkinGrid" aria-label="God Melee"></div>
+  </div>
+</div>
+<div class="row" style="margin-top:10px;">
+      <button class="btn" id="closeCustomize">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACCOUNT DETAILS -->
+<div id="overlayAccount" class="overlay" style="display:none;">
+  <div class="card account-card">
+    <div class="account-head">
+      <h2>👤 Account</h2>
+      <button class="btn" id="accountClose">✕ Close</button>
+    </div>
+    <div id="accountBody" class="account-body"></div>
+  </div>
+</div>
+
+<!-- SHARED LEVEL GRID (MOVED BETWEEN SINGLE & MULTI) -->
+<div id="levelsGrid" class="levelsGrid"></div>
+
+
+<!-- Touch controls -->
+<!-- Touch controls -->
+<div class="touch" id="touchLayer" aria-hidden="true">
+  <!-- LEFT MOVE STICK -->
+  <div class="stick" id="stickL">
+    <div class="nub" id="nubL"></div>
+  </div>
+
+  <!-- RIGHT AIM STICK (THIS WAS MISSING) -->
+  <div class="stick" id="stickR">
+    <div class="nub" id="nubR"></div>
+  </div>
+
+  <!-- WEAPON SWAP -->
+  <div class="kpad" id="btnSwap">WPN</div>
+
+  <!-- RELOAD BUTTON (mobile parity with PC 'R') -->
+  <div class="kpad" id="btnReload" style="bottom:390px;">RLD</div>
+
+  <!-- FIRE BUTTON (THIS WAS MISSING) -->
+  <div class="fire" id="btnFire">FIRE</div>
+</div>
+
+<div class="help" id="helpOverlay">
+  <strong>Controls:</strong> <code class="k">WASD</code> move • <code class="k">Mouse</code> aim+shoot • <code class="k">R</code> reload • <code class="k">Q/E</code> swap • <code class="k">Space</code> dash • <code class="k">Esc</code> pause • <code class="k">H</code> help.
+</div>
+<script>
+  if (/Mobi|Android|iPad|iPhone/i.test(navigator.userAgent)) {
+    const el = document.getElementById('mobileActions');
+    if (el) el.style.display = 'flex';
+    const rl = document.getElementById('btnReload');
+    if (rl) rl.addEventListener('touchstart', (e)=>{ e.preventDefault(); window.dispatchEvent(new KeyboardEvent('keydown',{key:'r'})); }, {passive:false});
+  }
+</script>
+
+<script>
+  const boot = document.getElementById('overlayBoot');
+  const bootText = document.getElementById('bootText');
+
+  const BOOT_MESSAGES = [
+    'Loading assets…',
+    'Preparing arena…',
+    'Waking the monsters…'
+  ];
+
+  let i = 0;
+  const msgTimer = setInterval(() => {
+    if (bootText) bootText.textContent = BOOT_MESSAGES[i++ % BOOT_MESSAGES.length];
+  }, 700);
+
+  window.addEventListener('game:ready', () => {
+    clearInterval(msgTimer);
+    if (!boot) return;
+    if (bootText) bootText.textContent = 'Ready!';
+    // Hold the boot screen for 4s while the menu music begins, so the
+    // track is already playing when the main menu fades in.
+    setTimeout(() => {
+      boot.classList.add('fade-out');
+      setTimeout(() => boot.remove(), 420);
+    }, window._SKIP_INTRO ? 900 : 4000);
+  });
+</script>
+
+<script src="js/gl3d.js"></script>
+<script src="js/shaders3d.js"></script>
+<script src="js/render3d.js?v=10"></script>
+<script src="js/themed_buildings.js?v=1"></script>
+<script src="js/render3d_fx.js?v=26"></script>
+<script src="js/melee_sprites.js?v=2"></script>
+<script src="js/network_http.js"></script>
+<script src="js/bot_sp.js?v=14"></script>
+<script src="js/building_catalog.js?v=9"></script>
+<script src="js/guardians.js?v=5"></script>
+<script src="js/death_overlay.js?v=2"></script>
+<script src="js/three.min.js?v=128"></script>
+<script src="js/home_visuals.js?v=2"></script>
+  <script src="js/shop_gun_preview.js?v=6"></script>
+<script src="js/runestones.js?v=8"></script>
+<script src="js/story_cinematic.js?v=2"></script>
+<script src="js/story_cutscene.js?v=5"></script>
+<script src="js/story_cutscene_meadow.js?v=3"></script>
+<script src="js/story_cutscene_dunes.js?v=4"></script>
+<script src="js/outro_engine.js?v=2"></script>
+<script src="js/story_cutscene_dunes_outro.js?v=3"></script>
+<script src="js/story_outro_meadow.js?v=3"></script>
+<script src="js/story_outro_glacial.js?v=3"></script>
+<script src="js/story_outro_cinder.js?v=2"></script>
+<script src="js/story_outro_void.js?v=3"></script>
+<script src="js/story_cutscene_glacial.js?v=5"></script>
+<script src="js/story_cutscene_cinder.js?v=3"></script>
+<script src="js/story_fragment.js?v=6"></script>
+<script src="js/story_ultimate_cutscene.js?v=5"></script>
+<script src="js/story.js?v=15"></script>
+<script src="js/boss_death_cutscene.js?v=4"></script>
+<script src="js/boss_stage_cutscene.js?v=3"></script>
+<script src="js/boss_hearth_warden.js?v=11"></script>
+  <script src="js/boss_pharaoh_glass.js?v=4"></script>
+  <script src="js/boss_rime_oracle.js?v=5"></script>
+  <script src="js/boss_magma_titan.js?v=4"></script>
+<script src="js/boss_attack_memory.js?v=1"></script>
+<script src="js/boss_void.js?v=7"></script>
+<script src="js/boss_hollow.js?v=9"></script>
+<script src="js/hollow_metamorphosis.js?v=4"></script>
+<script src="js/gauntlet_map.js?v=2"></script>
+<script src="js/gauntlet_intro.js?v=22"></script>
+<script src="js/gauntlet_glyph_reward.js?v=3"></script>
+<script src="js/hollow_breakfree.js?v=2"></script>
+<script src="js/hollow_death_cutscene.js?v=2"></script>
+<script src="js/story_soul_doorway.js?v=1"></script>
+<script src="js/ending_restore.js?v=1"></script>
+<script src="js/ending_break.js?v=1"></script>
+<script src="js/ending_take.js?v=1"></script>
+<script src="js/hollow_gauntlet.js?v=18"></script>
+<script src="js/story_void_metamorphosis.js?v=1"></script>
+<script src="js/cutscene_state.js?v=1"></script>
+<script src="js/cutscene_music.js?v=1"></script>
+<script src="js/game_music.js?v=7"></script>
+<script src="js/menu_music.js?v=6"></script>
+<script src="js/spectate.js?v=2"></script>
+<script src="js/realm_select.js?v=1"></script>
+<script src="js/pve16.js?v=story63"></script>
+<script src="js/teams_mode.js?v=11"></script>
+<script src="js/ctf_mode.js?v=7"></script>
+<script src="js/ctf_minimap.js?v=1"></script>
+<script src="js/teams_minimap.js?v=1"></script>
+<script src="js/loadout.js?v=8"></script>
+<script src="js/abyss_bg.js?v=3"></script>
+<script>
+  if (/Mobi|Android|iPad|iPhone/i.test(navigator.userAgent)) {
+    const help = document.getElementById('helpOverlay');
+    if (help) help.style.display = 'none';
+  }
+</script>
+
+<script>
+(function(){
+  var authState = null;
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[c]; }); }
+
+  // Compact auth chip in the sidebar footer.
+  function renderAccount(data){
+    authState = data || authState;
+    var slot = document.getElementById('accountSlot');
+    if(slot){
+      if(authState && authState.isAuthenticated){
+        slot.innerHTML = '<span class="side-chip">👤 '+escapeHtml(authState.username||'Account')+'</span>';
+      } else {
+        slot.innerHTML = '<a class="side-chip" href="/login?returnTo=/" target="_top">Sign in</a>';
+      }
+    }
+    var ov = document.getElementById('overlayAccount');
+    if(ov && ov.style.display === 'grid') renderAccountDetails();
+  }
+
+  function ownedWeaponNames(){
+    try {
+      var arr = JSON.parse(localStorage.getItem('arena_rune_unlocks') || '[]');
+      if(!Array.isArray(arr)) arr = [];
+      var all = ['pistol','rifle','shotgun'].concat(arr);
+      if(window.RS && RS.CATALOG){
+        return all.map(function(k){ var c = RS.CATALOG.find(function(x){return x.kind===k;}); return c?c.name:k; });
+      }
+      return all;
+    } catch(_) { return []; }
+  }
+  function storyRealmCount(){
+    try {
+      var p = JSON.parse(localStorage.getItem('arena_story_progress') || '{}');
+      var n = 0; for(var k in p) if(p[k] && (p[k].unlocked || p[k].completed)) n++; return n;
+    } catch(_) { return 0; }
+  }
+  function codexCount(){
+    try { var a = JSON.parse(localStorage.getItem('arena_discovered_buildings') || '[]'); return Array.isArray(a)?a.length:0; } catch(_) { return 0; }
+  }
+
+  // Full account details panel.
+  function renderAccountDetails(){
+    var body = document.getElementById('accountBody'); if(!body) return;
+    var rs = parseInt(localStorage.getItem('arena_runestones')||'0',10)||0;
+    var best = parseInt(localStorage.getItem('arenaBest')||'0',10)||0;
+    var nick = (localStorage.getItem('arenaNick')||'').toString();
+    var owned = ownedWeaponNames();
+    var realms = storyRealmCount();
+    var codex = codexCount();
+    var authed = !!(authState && authState.isAuthenticated);
+    var name = authed ? escapeHtml(authState.username||'Account') : 'Guest';
+    var email = authed ? escapeHtml(authState.email||'') : '';
+
+    var html = '<div class="account-status">';
+    html += '<div class="account-avatar">'+(authed?'👤':'👻')+'</div>';
+    html += '<div><div class="account-name">'+name+'</div>';
+    html += '<div class="account-email">'+(email||('Cloud save: '+(authed?'synced':'local only')))+'</div></div></div>';
+
+    html += '<div class="account-grid">';
+    html += '<div class="stat-tile"><div class="st-label">RuneStones</div><div class="st-val">'+rs+'</div><div class="st-sub">Shop currency</div></div>';
+    html += '<div class="stat-tile"><div class="st-label">Best Wave</div><div class="st-val">'+best+'</div><div class="st-sub">Personal record</div></div>';
+    html += '<div class="stat-tile"><div class="st-label">Weapons</div><div class="st-val">'+owned.length+'</div><div class="st-sub">'+escapeHtml(owned.slice(0,3).join(', ')||'—')+'</div></div>';
+    html += '<div class="stat-tile"><div class="st-label">Story Realms</div><div class="st-val">'+realms+'</div><div class="st-sub">Unlocked</div></div>';
+    html += '<div class="stat-tile"><div class="st-label">Buildings</div><div class="st-val">'+codex+'</div><div class="st-sub">Codex found</div></div>';
+    html += '<div class="stat-tile"><div class="st-label">Nickname</div><div class="st-val" style="font-size:15px">'+(nick?escapeHtml(nick):'—')+'</div><div class="st-sub">Multiplayer</div></div>';
+    html += '</div>';
+
+    html += '<div class="account-actions">';
+    if(authed){
+      html += '<button class="btn" id="accountLogout">Log out</button>';
+    } else {
+      html += '<a class="btn" href="/login?returnTo=/" target="_top">👤 Sign in</a>';
+      html += '<a class="btn" href="/register?returnTo=/" target="_top">✨ Register</a>';
+    }
+    html += '</div>';
+    body.innerHTML = html;
+    var lo = document.getElementById('accountLogout');
+    if(lo) lo.onclick = function(){ window.parent.postMessage({type:'auth:logout'}, '*'); };
+  }
+
+  function openAccount(){
+    renderAccountDetails();
+    document.querySelectorAll('.overlay').forEach(function(o){ o.style.display='none'; });
+    var ov = document.getElementById('overlayAccount'); if(ov) ov.style.display = 'grid';
+  }
+  function closeAccount(){
+    var ov = document.getElementById('overlayAccount'); if(ov) ov.style.display = 'none';
+    var intro = document.getElementById('overlayIntro'); if(intro) intro.style.display = 'grid';
+  }
+
+  var ib = document.getElementById('introAccount'); if(ib) ib.addEventListener('click', openAccount);
+  var cb = document.getElementById('accountClose'); if(cb) cb.addEventListener('click', closeAccount);
+  window.addEventListener('message', function(e){ if(e.data && e.data.type==='auth:user') renderAccount(e.data); });
+  window.__renderAccount = renderAccount;
+  window.__renderAccountDetails = renderAccountDetails;
+})();
+</script>
+<!-- NEW ENTRYPOINT -->
+<script>window.STORY_TEST_ALLFRAGMENTS = false; window._TEST_KILL_WARDEN = false; window._TEST_HOLLOW_HALF = false; window._TEST_KILL_HOLLOW = false;</script>
+<script src="js/main2.js?v=3"></script>
+<script>
+  
+
+  window.MENU_CONTEXT = 'intro'; 
+  let selectedMode = null; 
+
+  function showOverlay(id) {
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.style.display = 'none';
+    });
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'grid';
+  }
+
+  
+
+  function moveLevelsToSingle() {
+    const grid = document.getElementById('levelsGrid');
+    const strip = document.getElementById('singleLevelStrip');
+    if (!grid || !strip) return;
+    strip.innerHTML = '';
+    strip.appendChild(grid);
+  }
+  
+
+  function moveLevelsToMulti() {
+    const grid = document.getElementById('levelsGrid');
+    const strip = document.getElementById('multiLevelStrip');
+    if (!grid || !strip) return;
+    strip.innerHTML = '';
+    strip.appendChild(grid);
+  }
+
+  function moveLevelsToOffline() {
+    const grid = document.getElementById('levelsGrid');
+    const strip = document.getElementById('offlineLevelStrip');
+    if (!grid || !strip) return;
+    strip.innerHTML = '';
+    strip.appendChild(grid);
+  }
+
+  function updateHudButtonsForMode() {
+    const online = isNetActive();
+
+   
+    const btnPause = document.getElementById('btnPause');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnHome = document.getElementById('btnHome');
+    const btnSettings = document.getElementById('btnSettings');
+    const btnHelp = document.getElementById('btnHelp');
+    const btnExit = document.getElementById('btnExit');
+
+    if (!online) {
+      btnPause && (btnPause.style.display = 'inline-block');
+      btnRestart && (btnRestart.style.display = 'inline-block');
+      btnHome && (btnHome.style.display = 'inline-block');
+      btnSettings && (btnSettings.style.display = 'inline-block');
+      btnHelp && (btnHelp.style.display = 'inline-block');
+      btnExit && (btnExit.style.display = 'none');
+    } else {
+      btnPause && (btnPause.style.display = 'none');
+      btnRestart && (btnRestart.style.display = 'none');
+      btnHome && (btnHome.style.display = 'none');
+      btnSettings && (btnSettings.style.display = 'none');
+      btnHelp && (btnHelp.style.display = 'inline-block');
+      btnExit && (btnExit.style.display = 'inline-block');
+    }
+  }
+
+  function openCustomizeOverlay() {
+    if (typeof buildSkins === 'function') {
+      buildSkins();
+    } else {
+      console.warn('buildSkins() missing');
+    }
+
+    if (typeof buildGunsUI === 'function') {
+      buildGunsUI();
+    } else {
+      console.warn('buildGunsUI() missing');
+    }
+
+    if (typeof buildMeleeUI === 'function') {
+      buildMeleeUI();
+    } else {
+      console.warn('buildMeleeUI() missing');
+    }
+
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.style.display = 'none';
+    });
+
+    const ov = document.getElementById('overlayCustomize');
+    if (ov) {
+      ov.style.display = 'grid';
+    }
+  }
+
+  document.getElementById('btnIntroSingle')?.addEventListener('click', () => {
+
+    localStorage.setItem('arenaMode', 'single');
+
+    // Singleplayer never carries Teams / PvP / bot flags over from a prior match.
+    window.TEAMS_MODE = false;
+    window.CTF_MODE = false;
+    window.PVP_MODE = false;
+    window.BOTS_ENABLED = false;
+    if (window.Teams && window.Teams.reset) window.Teams.reset();
+    if (window.CTF && window.CTF.reset) window.CTF.reset();
+
+    if (window.Net && Net.state) {
+      Net.state.lobbyId = null;
+    }
+
+    window.MENU_CONTEXT = 'single';
+    showOverlay('overlaySingle');
+    moveLevelsToSingle();
+  });
+  document.getElementById('btnIntroOffline')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'offline';
+    showOverlay('overlayOffline');
+
+
+    const grid = document.getElementById('levelsGrid');
+    const strip = document.getElementById('offlineLevelStrip');
+    if (grid && strip){
+      strip.innerHTML = '';
+      strip.appendChild(grid);
+    }
+  });
+
+
+  document.getElementById('btnIntroMulti')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'multi';
+    showOverlay('overlayHome');
+  });
+
+
+  document.getElementById('introCustomize')?.addEventListener('click', () => {
+    openCustomizeOverlay();
+  });
+
+  document.getElementById('introBuildings')?.addEventListener('click', () => {
+    if (typeof buildBuildingCatalogUI === 'function') buildBuildingCatalogUI();
+    document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    const el = document.getElementById('overlayBuildings');
+    if (el) el.style.display = 'grid';
+  });
+  document.getElementById('closeBuildings')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'intro';
+    document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    const el = document.getElementById('overlayIntro');
+    if (el) el.style.display = 'grid';
+  });
+  // Aux overlays (Help/Settings) opened from a menu hub must NOT pause the
+  // game (none is running). pve16's showOverlay() always toggles pause, so
+  // from the menu we show them directly and let pve16's Close button hide
+  // them again — the hub stays visible behind.
+  const HUB_IDS = ['overlayIntro','overlayHome','overlaySingle','overlayOffline'];
+  const isHubShown = () => HUB_IDS.some(id => { const e = document.getElementById(id); return e && e.style.display === 'grid'; });
+  const showAux = (id) => { const e = document.getElementById(id); if (e) e.style.display = 'grid'; };
+  document.getElementById('introHelp')?.addEventListener('click', () => showAux('overlayHelp'));
+  document.getElementById('introSettings')?.addEventListener('click', () => showAux('overlaySettings'));
+  // HUD top-bar Settings/Help: menu-safe path on a hub, else pve16's in-game
+  // handler (which pauses the match).
+  (function(){
+    const bs = document.getElementById('btnSettings'), bh = document.getElementById('btnHelp');
+    if (bs){ const o = bs.onclick; bs.onclick = () => isHubShown() ? showAux('overlaySettings') : (o && o()); }
+    if (bh){ const o = bh.onclick; bh.onclick = () => isHubShown() ? showAux('overlayHelp') : (o && o()); }
+  })();
+  document.getElementById('backFromOffline')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'intro';
+    showOverlay('overlayIntro');
+  });
+  window.OFFLINE_MODE_TYPE = "pve";
+
+  document.getElementById('btnOfflinePVE')?.addEventListener('click', () => {
+    OFFLINE_MODE_TYPE = "pve";
+    window.TEAMS_MODE = false;
+    moveLevelsToOffline();
+  });
+
+  document.getElementById('btnOfflinePVP')?.addEventListener('click', () => {
+    OFFLINE_MODE_TYPE = "pvp";
+    window.TEAMS_MODE = false;
+    moveLevelsToOffline();
+  });
+
+  document.getElementById('btnOfflineTeams')?.addEventListener('click', () => {
+    OFFLINE_MODE_TYPE = "teams";
+    window.TEAMS_MODE = true;
+    window.CTF_MODE = false;
+    moveLevelsToOffline();
+  });
+
+  document.getElementById('btnOfflineCTF')?.addEventListener('click', () => {
+    OFFLINE_MODE_TYPE = "ctf";
+    window.TEAMS_MODE = false;
+    window.CTF_MODE = true;
+    moveLevelsToOffline();
+  });
+
+  // Offline mode-rail active state + label (mirrors the React ModeRail).
+  (function () {
+    const rail = document.getElementById('offlineModeRail');
+    const label = document.getElementById('offlineModeLabel');
+    if (!rail) return;
+    const setActive = (btn) => {
+      rail.querySelectorAll('.rs-mode').forEach(b => b.classList.remove('is-active'));
+      if (btn) { btn.classList.add('is-active'); if (label) label.textContent = (btn.querySelector('.rs-mode-name')?.textContent || btn.dataset.mode || '').trim(); }
+    };
+    rail.addEventListener('click', (e) => { const b = e.target.closest('.rs-mode'); if (b) setActive(b); });
+    setActive(rail.querySelector('[data-mode="pve"]') || rail.querySelector('.rs-mode'));
+  })();
+
+  document.getElementById('modePvE')?.addEventListener('click', () => {
+    selectedMode = 'pve';
+    window.MENU_CONTEXT = 'multi';
+
+    localStorage.setItem('arenaMode', 'pve');
+
+    document.body.classList.remove('mode-pvp');
+    document.body.classList.add('mode-pve');
+
+    moveLevelsToMulti();
+  });
+
+  document.getElementById('modePvP')?.addEventListener('click', () => {
+    selectedMode = 'pvp';
+    window.MENU_CONTEXT = 'multi';
+
+    localStorage.setItem('arenaMode', 'pvp');
+
+    document.body.classList.remove('mode-pve');
+    document.body.classList.add('mode-pvp');
+
+    moveLevelsToMulti();
+  });
+
+
+
+  const joinBtn = document.getElementById('joinMultiBtn');
+  if (joinBtn) {
+    joinBtn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+
+      if (window.__JOIN_LOCK__) return;
+      window.__JOIN_LOCK__ = true;
+      joinBtn.disabled = true;
+
+      try {
+        const nick = (document.getElementById('multiNick')?.value || '').trim();
+        if (!nick) { alert('Enter a username'); return; }
+
+        localStorage.setItem('arenaNick', nick);
+
+
+        if (!selectedMode) {
+          alert('Select PvE or PvP first.');
+          return;
+        }
+
+        const mode = selectedMode;
+
+        console.log('[CLIENT JOIN]', { mode, selectedMode, stored: localStorage.getItem('arenaMode') });
+
+        await Net.join(mode, nick);
+
+        const idEl = document.getElementById('multiLobbyId');
+        if (idEl) idEl.textContent = Net.state.lobbyId || '—';
+
+        const badge = document.getElementById('lobbyBadge');
+        if (badge) {
+          badge.style.display = 'inline-block';
+          badge.textContent = `Lobby ${Net.state.lobbyId} • ${mode.toUpperCase()}`;
+        }
+      } finally {
+        window.__JOIN_LOCK__ = false;
+        joinBtn.disabled = false;
+      }
+    };
+  }
+
+
+  function hookLevelGridGuard() {
+    const grid = document.getElementById('levelsGrid');
+    if (!grid) {
+      requestAnimationFrame(hookLevelGridGuard);
+      return;
+    }
+
+    
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-level]');
+      if (card) {
+        const levelId = card.dataset.level;
+
+
+        localStorage.setItem('arenaLevel', levelId);
+        localStorage.setItem('level', levelId);
+
+        if (window.Net && Net.state) {
+          Net.state.level = levelId;
+        }
+      }
+      if (window.MENU_CONTEXT === 'multi') {
+        if (!(window.Net && Net.state && Net.state.lobbyId)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          alert('Join a multiplayer lobby first.');
+          return;
+        }
+
+        showOverlay('overlayLoading');
+      }
+
+      if (window.MENU_CONTEXT === 'single') {
+
+        window.BOTS_ENABLED = false;
+        window.PVP_MODE = false;
+
+        showOverlay('overlayLoading');
+      }
+
+      if (window.MENU_CONTEXT === 'offline') {
+
+        window.BOTS_ENABLED = true;
+        window.PVP_MODE = (window.OFFLINE_MODE_TYPE === "pvp" || window.OFFLINE_MODE_TYPE === "teams" || window.OFFLINE_MODE_TYPE === "ctf");
+        window.TEAMS_MODE = (window.OFFLINE_MODE_TYPE === "teams");
+        window.CTF_MODE = (window.OFFLINE_MODE_TYPE === "ctf");
+
+        showOverlay('overlayLoading');
+      }
+    }, true);
+  }
+  hookLevelGridGuard();
+
+  
+
+  document.getElementById('backFromSingle')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'intro';
+    showOverlay('overlayIntro');
+  });
+
+  document.getElementById('backFromMulti')?.addEventListener('click', () => {
+    window.MENU_CONTEXT = 'intro';
+    showOverlay('overlayIntro');
+  });
+
+
+  window.addEventListener('game:ready', () => {
+    window.MENU_CONTEXT = 'intro';
+    if (window._SKIP_INTRO) return;
+    setTimeout(() => showOverlay('overlayIntro'), 4000);
+  });
+  </script>
+  <script>
+  document.getElementById('btnHome')?.addEventListener('click', () => {
+
+    try { if (window._hardStopGame) window._hardStopGame(); else if (window.state) state.running = false; } catch {}
+
+
+    window.MENU_CONTEXT = 'intro';
+    document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    const intro = document.getElementById('overlayIntro');
+    if (intro) intro.style.display = 'grid';
+  });
+  </script>
+  <script>
+    
+    function goToPostGameMenu() {
+
+      try {
+        if (window._hardStopGame) window._hardStopGame(); else if (window.state) state.running = false;
+      } catch {}
+
+
+      document.querySelectorAll('.overlay').forEach(o => {
+        o.style.display = 'none';
+      });
+
+
+      if (window.MENU_CONTEXT === 'multi') {
+        {
+          const el = document.getElementById('overlayHome');
+          if (el) el.style.display = 'grid';
+        }
+      } else {
+
+        {
+          const el = document.getElementById('overlaySingle');
+          if (el) el.style.display = 'grid';
+        }
+      }
+    }
+
+        
+        
+    </script>
+    <script>
+      
+
+      function forcePostGameMenu() {
+        try {
+          if (window.state) state.running = false;
+        } catch {}
+
+
+        document.querySelectorAll('.overlay').forEach(o => {
+          o.style.display = 'none';
+        });
+
+
+        if (window.MENU_CONTEXT === 'multi') {
+          {
+            const el = document.getElementById('overlayHome');
+            if (el) el.style.display = 'grid';
+          }
+          return;
+        }
+
+
+        {
+          const el = document.getElementById('overlaySingle');
+          if (el) el.style.display = 'grid';
+        }
+      }
+      
+      </script>
+      <script>
+
+
+        function routeHomeCorrectly(e) {
+
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          try { if (window._hardStopGame) window._hardStopGame(); else if (window.state) state.running = false; } catch {}
+
+          // Leaving a match resets every game-mode flag so the next mode starts clean.
+          window.TEAMS_MODE = false;
+          window.CTF_MODE = false;
+          window.PVP_MODE = false;
+          window.BOTS_ENABLED = false;
+          if (window.Teams && window.Teams.reset) window.Teams.reset();
+          if (window.CTF && window.CTF.reset) window.CTF.reset();
+
+
+          document.querySelectorAll('.overlay').forEach(o => {
+            o.style.display = 'none';
+          });
+
+
+          if (window.MENU_CONTEXT === 'multi') {
+            {
+              const el = document.getElementById('overlayHome');
+              if (el) el.style.display = 'grid';
+            }
+          } else if (window.MENU_CONTEXT === 'offline') {
+            {
+              const el = document.getElementById('overlayOffline');
+              if (el) el.style.display = 'grid';
+            }
+          } else {
+            {
+              const el = document.getElementById('overlaySingle');
+              if (el) el.style.display = 'grid';
+            }
+          }
+        }
+
+
+        document.getElementById('btnHome')?.addEventListener('click', routeHomeCorrectly, true);
+        document.getElementById('homeBtn2')?.addEventListener('click', routeHomeCorrectly, true);
+        // Victory "Home" should return to the hub the match was launched from
+        // (offline / single / multi), not always the multiplayer screen. Bound in
+        // the capture phase so it pre-empts pve16's default goHome() binding.
+        document.getElementById('victoryHomeBtn')?.addEventListener('click', routeHomeCorrectly, true);
+        </script>
+
+</body>
+</html>

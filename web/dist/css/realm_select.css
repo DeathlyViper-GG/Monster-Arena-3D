@@ -1,0 +1,393 @@
+/* realm_select.css — Offline + Singleplayer level-select (cursed-realms design)
+   Fonts: Cinzel (display), Sora (body), JetBrains Mono (mono).
+   Layout + realm cards mirror the React OfflineModePage design, over the
+   shared Abyss background (abyss_bg.js). */
+
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Sora:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ===== overlay shell ===== */
+#overlayOffline.realm-select,
+#overlaySingle.realm-select {
+  display: grid;
+  place-items: stretch;
+  padding: 0;
+  /* Opaque abyss base so the in-game canvas + HUD don't bleed through.
+     Mirrors #overlaySingle's base in abyss_bg.css, applied to both hubs. */
+  background-color:#08090a;
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(52,26,88,.5), transparent 62%),
+    radial-gradient(90% 60% at 50% 112%, rgba(4,44,58,.42), transparent 66%),
+    linear-gradient(180deg,#08090a 0%,#0b0912 46%,#05060a 100%);
+  backdrop-filter:none;
+}
+.realm-select .rs-main {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1460px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 20px 36px;
+  box-sizing: border-box;
+}
+@media (min-width: 640px){ .realm-select .rs-main{ padding: 32px 32px 36px; } }
+@media (min-width: 1024px){ .realm-select .rs-main{ padding: 32px 48px 36px; } }
+
+/* ===== header ===== */
+.rs-header { border-bottom: 1px solid rgba(255,255,255,0.10); padding-bottom: 24px; }
+.rs-title {
+  font-family: "Cinzel", ui-serif, Georgia, serif;
+  font-weight: 500;
+  font-size: 38px;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  color: #f5f2e9;
+  margin: 0;
+  text-shadow: 0 0 70px rgba(154,134,255,0.25);
+}
+@media (min-width: 640px){ .rs-title{ font-size: 52px; } }
+.rs-subtitle {
+  margin: 16px 0 0;
+  max-width: 34rem;
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.45);
+}
+
+/* ===== toolbar (mode rail) ===== */
+.rs-toolbar {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.rs-modes { display: flex; flex-wrap: wrap; gap: 10px; }
+.rs-mode {
+  --rs-accent: #9a86ff;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.025);
+  color: rgba(255,255,255,0.45);
+  padding: 9px 15px 9px 11px;
+  cursor: pointer;
+  transition: border-color .3s ease, background .3s ease, color .3s ease, box-shadow .3s ease, transform .2s ease;
+}
+.rs-mode .rs-mode-ico {
+  font-size: 17px;
+  line-height: 1;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--rs-accent) 60%, transparent));
+  transition: transform .3s ease, filter .3s ease;
+}
+.rs-mode .rs-mode-name { font-weight: 600; color: rgba(255,255,255,0.62); }
+.rs-mode .rs-mode-tag {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.28);
+  padding-left: 9px;
+  margin-left: 4px;
+  border-left: 1px solid rgba(255,255,255,0.10);
+}
+.rs-mode:hover { color: #f6f3ea; border-color: rgba(255,255,255,0.18); transform: translateY(-1px); }
+.rs-mode:hover .rs-mode-ico { transform: scale(1.12); }
+.rs-mode:hover .rs-mode-name { color: #f6f3ea; }
+.rs-mode.is-active {
+  border-color: color-mix(in srgb, var(--rs-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--rs-accent) 10%, transparent);
+  color: #f6f3ea;
+  box-shadow: 0 0 26px -8px var(--rs-accent), inset 0 1px 0 color-mix(in srgb, var(--rs-accent) 22%, transparent);
+}
+.rs-mode.is-active .rs-mode-name { color: #f6f3ea; }
+.rs-mode.is-active .rs-mode-ico { filter: drop-shadow(0 0 11px var(--rs-accent)); transform: scale(1.12); }
+.rs-mode.is-active .rs-mode-tag { color: color-mix(in srgb, var(--rs-accent) 80%, white 10%); border-left-color: color-mix(in srgb, var(--rs-accent) 45%, transparent); }
+
+/* per-mode theming — each mode reads as its own thing */
+.rs-mode--pve   { --rs-accent: #7dffa3; }
+.rs-mode--pvp   { --rs-accent: #ff5a5a; }
+.rs-mode--teams { --rs-accent: #ffc24a; }
+.rs-mode--ctf   { --rs-accent: #9a86ff; }
+
+.rs-mode-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+}
+
+/* ===== grid wrapper ===== */
+.rs-grid { margin-top: 32px; flex: 1; min-height: 0; }
+/* the shared #levelsGrid is the actual card container */
+#levelsGrid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 640px){ #levelsGrid{ grid-template-columns: repeat(2, 1fr); gap: 20px; } }
+@media (min-width: 1024px){ #levelsGrid{ grid-template-columns: repeat(5, 1fr); gap: 20px; } }
+
+/* ===== realm card ===== */
+.realm-card {
+  --accent: #7dffa3;
+  --deep: #0a0c14;
+  --rx: 0deg;
+  --ry: 0deg;
+  --mx: 50%;
+  --my: 50%;
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 26px;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+}
+.realm-card:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.4); border-radius: 26px; }
+
+/* drop shadow plate */
+.realm-card .rs-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%);
+  transform: translateY(9px) scale(0.965);
+  opacity: 0.3;
+  transition: opacity .5s ease;
+  pointer-events: none;
+}
+.realm-card:hover .rs-shadow { opacity: 0.6; }
+
+.realm-card .rs-inner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 26px;
+  border: 1px solid color-mix(in srgb, var(--accent) 19%, transparent);
+  background: #0a0c14;
+  transform: perspective(1200px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform .45s cubic-bezier(.2,.8,.2,1), border-color .4s ease, box-shadow .45s ease;
+  box-shadow: 0 22px 55px -34px color-mix(in srgb, var(--accent) 53%, transparent);
+}
+.realm-card.is-selected .rs-inner {
+  border-color: color-mix(in srgb, var(--accent) 67%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 33%, transparent), 0 30px 70px -30px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 1px 0 color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* media */
+.realm-card .rs-media { position: relative; height: 186px; overflow: hidden; }
+@media (min-width: 640px){ .realm-card .rs-media{ height: 210px; } }
+.realm-card .rs-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.05);
+  transition: transform 1.4s cubic-bezier(.2,.8,.2,1);
+}
+.realm-card:hover .rs-img { transform: scale(1.10); }
+.realm-card .rs-tint {
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 68% 18%, color-mix(in srgb, var(--accent) 33%, transparent), transparent 62%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.realm-card .rs-fade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, #0a0c14, rgba(10,12,20,0.25) 50%, transparent);
+  pointer-events: none;
+}
+.realm-card .rs-spot {
+  position: absolute; inset: 0;
+  background: radial-gradient(180px circle at var(--mx) var(--my), color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity .5s ease;
+  pointer-events: none;
+}
+.realm-card:hover .rs-spot { opacity: 1; }
+
+/* icon chip */
+.realm-card .rs-icon {
+  position: absolute; left: 14px; top: 14px;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 33%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--accent) 67%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 18px; line-height: 1;
+}
+/* badge */
+.realm-card .rs-badge {
+  position: absolute; right: 14px; top: 16px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.40);
+  padding: 4px 10px;
+  backdrop-filter: blur(6px);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.realm-card .rs-badge .rs-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent);
+}
+/* floating orb */
+.realm-card .rs-orb {
+  position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+  width: 48px; height: 48px;
+}
+.realm-card .rs-orb-glow {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: var(--accent); opacity: 0.75;
+  filter: blur(8px);
+  animation: rs-pulse 4.5s ease-in-out infinite;
+}
+.realm-card .rs-orb-core {
+  position: absolute; inset: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff, var(--accent) 48%, var(--deep) 100%);
+  box-shadow: 0 0 22px var(--accent);
+  animation: rs-float 6s ease-in-out infinite;
+}
+@keyframes rs-float { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-7px); } }
+@keyframes rs-pulse { 0%,100%{ opacity:.45; transform: scale(.92); } 50%{ opacity:.95; transform: scale(1.12); } }
+
+/* sheen */
+.realm-card .rs-sheen {
+  position: absolute; top: -40px; bottom: -40px; left: 0; width: 33%;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.20), transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.realm-card:hover .rs-sheen { animation: rs-sheen 1.5s cubic-bezier(.3,.7,.3,1); }
+@keyframes rs-sheen {
+  0% { transform: translateX(-160%) skewX(-16deg); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateX(320%) skewX(-16deg); opacity: 0; }
+}
+
+/* body */
+.realm-card .rs-body { position: relative; padding: 14px 16px 20px; }
+.realm-card .rs-head { display: flex; align-items: baseline; gap: 8px; }
+.realm-card .rs-idx {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--accent);
+}
+.realm-card .rs-name {
+  font-family: "Cinzel", ui-serif, Georgia, serif;
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  color: #f4f1e8;
+  margin: 0;
+}
+.realm-card .rs-caption {
+  margin: 6px 0 0;
+  min-height: 34px;
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.40);
+}
+.realm-card .rs-bar {
+  margin-top: 12px;
+  height: 2px; width: 100%;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  overflow: hidden;
+}
+.realm-card .rs-bar-fill {
+  height: 100%; width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent));
+  box-shadow: 0 0 10px var(--accent);
+  transition: width .5s ease;
+}
+.realm-card.is-selected .rs-bar-fill { width: 100%; }
+
+/* ===== footer ===== */
+.rs-footer {
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.rs-back {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.60);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: border-color .25s ease, background .25s ease, color .25s ease, transform .25s ease;
+}
+.rs-back:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.06); color: #fff; transform: translateX(-2px); }
+.rs-back .rs-arrow { transition: transform .25s ease; }
+.rs-back:hover .rs-arrow { transform: translateX(-2px); }
+
+.rs-selected { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.rs-sel-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+}
+.rs-sel-name {
+  font-family: "Cinzel", ui-serif, Georgia, serif;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--rs-accent, #7dffa3);
+  text-shadow: 0 0 26px color-mix(in srgb, var(--rs-accent, #7dffa3) 40%, transparent);
+}
+.rs-sel-badge {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--rs-accent, #7dffa3) 33%, transparent);
+  color: var(--rs-accent, #7dffa3);
+  background: color-mix(in srgb, var(--rs-accent, #7dffa3) 7%, transparent);
+  padding: 4px 12px;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .realm-card .rs-img,
+  .realm-card .rs-orb-glow,
+  .realm-card .rs-orb-core,
+  .realm-card .rs-sheen { animation: none !important; transition: none !important; }
+}

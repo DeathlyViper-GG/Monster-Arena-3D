@@ -1,0 +1,189 @@
+/* =====================================================================
+   home_visuals.css — Monster Arena home screen visuals
+   Ported from the React "Home" design into vanilla CSS for game.html.
+   Scoped to #overlayIntro. Does NOT touch existing buttons or layout.
+   Layer order (z-index): bg(0) < arena3d(1) < scanlines(1) < particles(2)
+   < card(2, above particles by DOM order) < cursor(5) < strike(20) < nav(30)
+   ===================================================================== */
+
+/* ---------- Backdrop layers ---------- */
+#hvArena3D{ position:fixed; inset:0; z-index:1; pointer-events:none; }
+#hvArena3D canvas{ width:100%!important; height:100%!important; display:block; }
+
+#hvParticles{ position:absolute; inset:0; z-index:2; pointer-events:none; width:100%; height:100%; }
+
+.hv-scanlines{ position:absolute; inset:0; z-index:1; pointer-events:none; opacity:.28;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  mix-blend-mode:overlay; }
+
+#hvCursor{ position:fixed; left:0; top:0; z-index:5; width:460px; height:460px; border-radius:50%;
+  pointer-events:none; opacity:.7; filter:blur(70px); display:none;
+  background:radial-gradient(circle, rgba(34,230,255,.32), rgba(0,130,255,.2) 46%, rgba(120,60,255,.12) 62%, transparent 74%); }
+@media (min-width:768px){ #hvCursor{ display:block; } }
+
+#hvStrike{ position:fixed; inset:0; z-index:20; pointer-events:none; opacity:0; }
+#hvStrike.arena-strike{ animation:hvStrikeFlash .55s ease-out; }
+@keyframes hvStrikeFlash{
+  0%{ opacity:0; }
+  8%{ opacity:.85; background:radial-gradient(circle at 50% 40%, rgba(126,244,255,.55), rgba(120,60,255,.2) 40%, transparent 70%); }
+  100%{ opacity:0; }
+}
+
+/* ---------- Card interior layers (behind content) ---------- */
+.intro-card{ position:relative; }
+.intro-card .hv-runes,
+.intro-card .hv-halo,
+.intro-card .hv-particles-int{ z-index:0; }
+.intro-card .arena-subtitle,
+.intro-card > .row{ position:relative; z-index:2; }
+
+.hv-runes{ position:absolute; inset:0; overflow:hidden; border-radius:26px; pointer-events:none; }
+.hv-rune-glyph{ position:absolute; bottom:-30px; color:rgba(126,244,255,.5); opacity:0;
+  filter:drop-shadow(0 0 6px rgba(34,230,255,.6));
+  animation:hvRuneRise 16s linear infinite; }
+@keyframes hvRuneRise{
+  0%{ transform:translateY(0) scale(.8); opacity:0; }
+  12%{ opacity:.6; }
+  88%{ opacity:.3; }
+  100%{ transform:translateY(-130px) scale(1.1); opacity:0; }
+}
+
+.hv-halo{ position:absolute; left:50%; top:26%; width:420px; height:420px;
+  transform:translate(-50%,-50%); pointer-events:none;
+  background:radial-gradient(circle, rgba(126,244,255,.22), rgba(120,60,255,.12) 40%, transparent 70%);
+  filter:blur(8px); animation:hvHaloPulse 5s ease-in-out infinite; }
+@keyframes hvHaloPulse{
+  0%,100%{ opacity:.5; transform:translate(-50%,-50%) scale(1); }
+  50%{ opacity:.85; transform:translate(-50%,-50%) scale(1.08); }
+}
+
+.hv-particles-int{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:.55; }
+
+/* ---------- Rune seal (tracking eyeball) ---------- */
+.hv-seal{ position:relative; margin:0 auto 18px; width:108px; height:108px; z-index:2; }
+.hv-seal-ticks{ position:absolute; inset:0; border-radius:50%;
+  background:conic-gradient(from 0deg,
+    transparent 0 4deg, rgba(126,244,255,.5) 4deg 5deg,
+    transparent 5deg 13deg, rgba(126,244,255,.5) 13deg 14deg, transparent 14deg 22deg,
+    rgba(126,244,255,.5) 22deg 23deg, transparent 23deg);
+  animation:hvSigil 60s linear infinite; }
+.hv-seal-ticks.rev{ inset:11px; opacity:.45; animation-direction:reverse; animation-duration:42s; }
+@keyframes hvSigil{ to{ transform:rotate(360deg); } }
+.hv-seal-glow{ position:absolute; inset:16px; border-radius:50%; filter:blur(16px);
+  background:radial-gradient(circle, rgba(126,244,255,1), rgba(34,140,255,.65) 46%, rgba(255,34,70,.5) 70%, transparent 80%); }
+.hv-seal-ring{ position:absolute; inset:26px; border-radius:50%; padding:2px;
+  background:conic-gradient(from 210deg, #22e6ff, #7ef4ff, #4f9dff, #b060ff, #ff2246, #22e6ff); }
+.hv-seal-eye{ position:relative; width:100%; height:100%; overflow:hidden; border-radius:50%;
+  background:#04060c; box-shadow:inset 0 0 22px rgba(0,0,0,.95); display:grid; place-items:center; }
+.hv-seal-ball{ position:relative; width:50px; height:32px; border-radius:50%; overflow:hidden;
+  display:grid; place-items:center;
+  background:radial-gradient(circle at 50% 45%, #12303f 0%, #08131d 62%, #04070d 100%); }
+.hv-seal-ball::after{ content:""; position:absolute; inset:0; border-radius:50%; opacity:.7;
+  background:repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,34,70,.5) 0deg 2deg, transparent 2deg 26deg); }
+.hv-seal-iris{ position:relative; width:22px; height:22px; border-radius:50%; z-index:2;
+  background:radial-gradient(circle at 50% 38%, #e6feff 0%, #22e6ff 34%, #0a86ad 68%, #04202e 100%);
+  box-shadow:0 0 0 2px rgba(255,34,70,.6), 0 0 16px rgba(34,230,255,1), 0 0 38px rgba(34,180,255,.8), 0 0 64px rgba(255,34,70,.5); }
+.hv-seal-pupil{ width:3.5px; height:20px; border-radius:50%; background:#03060a; margin:0 auto; }
+.hv-seal-shade{ position:absolute; inset:0; border-radius:50%; pointer-events:none;
+  background:linear-gradient(180deg, rgba(0,0,0,0.9), transparent 40%, transparent 60%, rgba(0,0,0,0.9)); }
+.hv-seal-rim{ position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:.9;
+  background:radial-gradient(circle at 50% 50%, transparent 32%, rgba(255,20,60,0.45) 64%, rgba(110,0,20,0.75) 100%); }
+.hv-seal-ball{ animation:hvBlink 6.5s ease-in-out infinite; transform-origin:center; }
+@keyframes hvBlink{ 0%,90%,100%{ transform:scaleY(1); } 94%,96%{ transform:scaleY(0.08); } }
+@media (prefers-reduced-motion: reduce){ .hv-seal-ball{ animation:none!important; } }
+
+/* Extra rune spokes around the eyeball */
+.hv-seal-spokes{
+  position:absolute; inset:-7px; border-radius:50%; pointer-events:none; opacity:.5;
+  background:repeating-conic-gradient(from 0deg at 50% 50%, rgba(126,244,255,.6) 0deg .4deg, transparent .4deg 4.5deg);
+  -webkit-mask: radial-gradient(circle, transparent 74%, #000 78%, #000 99%, transparent 100%);
+          mask: radial-gradient(circle, transparent 74%, #000 78%, #000 99%, transparent 100%);
+  animation:hvSigil 80s linear infinite;
+}
+.hv-seal-spokes.rev{
+  inset:6px; opacity:.4;
+  background:repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,90,120,.5) 0deg .35deg, transparent .35deg 6deg);
+  -webkit-mask: radial-gradient(circle, transparent 60%, #000 66%, #000 92%, transparent 96%);
+          mask: radial-gradient(circle, transparent 60%, #000 66%, #000 92%, transparent 96%);
+  animation-direction:reverse; animation-duration:55s;
+}
+@media (prefers-reduced-motion: reduce){ .hv-seal-spokes{ animation:none!important; } }
+
+/* ---------- Heroic crest (golden angel wings) ---------- */
+.hv-crest{ position:absolute; inset:0; z-index:1; pointer-events:none; display:none; }
+@media (min-width:768px){ .hv-crest{ display:block; } }
+.hv-wing{ position:absolute; top:50%; width:340px; height:170px; transform:translateY(-50%); }
+.hv-wing.l{ left:35px; }
+.hv-wing.r{ right:35px; }
+.hv-wing svg{ width:100%; height:100%; display:block;
+  filter: drop-shadow(0 0 10px rgba(255,200,90,.7)) drop-shadow(0 0 24px rgba(255,170,50,.45)); }
+.hv-wing.l svg{ transform-origin:8% 90%; animation:hvFlapL 3.4s ease-in-out infinite, hvWingGlow 3.6s ease-in-out infinite; }
+.hv-wing.r svg{ transform-origin:92% 90%; animation:hvFlapR 3.4s ease-in-out infinite, hvWingGlow 3.6s ease-in-out infinite; }
+@keyframes hvFlapL{ 0%,100%{ transform:rotate(6deg); } 50%{ transform:rotate(-13deg); } }
+@keyframes hvFlapR{ 0%,100%{ transform:rotate(-6deg); } 50%{ transform:rotate(13deg); } }
+@keyframes hvWingGlow{
+  0%,100%{ filter: drop-shadow(0 0 8px rgba(255,200,90,.55)) drop-shadow(0 0 18px rgba(255,170,50,.35)); }
+  50%{ filter: drop-shadow(0 0 14px rgba(255,220,120,.9)) drop-shadow(0 0 34px rgba(255,180,60,.6)); }
+}
+@media (prefers-reduced-motion: reduce){ .hv-wing svg{ animation:none!important; } }
+
+/* ---------- Title enhancement ---------- */
+.arena-title.hv-title{ position:relative; z-index:2; }
+
+/* ---------- Cursed title (ported title-cursed) ---------- */
+.title-cursed{
+  position:relative; z-index:2;
+  font-size:clamp(28px, 5.2vw, 48px);
+  font-weight:800; text-transform:uppercase; letter-spacing:0.12em; line-height:1.08;
+  background:linear-gradient(180deg,#fff 0%,#ffe39a 28%,#ff9a3c 55%,#ff3b2f 78%,#b00020 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:0 0 22px rgba(255,130,40,.5), 0 0 48px rgba(255,40,20,.35);
+  animation:hvTitlePulse 4s ease-in-out infinite;
+}
+.title-cursed::before{
+  content:attr(data-text); position:absolute; left:0; top:0; width:100%;
+  background:linear-gradient(180deg,#22e6ff,#7ef4ff);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  transform:translate(-2px,0); opacity:.45; mix-blend-mode:screen; z-index:-1;
+}
+.title-cursed::after{
+  content:attr(data-text); position:absolute; left:0; top:0; width:100%;
+  background:linear-gradient(180deg,#ff2246,#ff7a3c);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  transform:translate(2px,0); opacity:.45; mix-blend-mode:screen; z-index:-1;
+}
+@keyframes hvTitlePulse{
+  0%,100%{ filter:drop-shadow(0 0 14px rgba(255,120,40,.35)); }
+  50%{ filter:drop-shadow(0 0 26px rgba(255,80,30,.6)); }
+}
+@media (prefers-reduced-motion: reduce){ .title-cursed{ animation:none!important; } }
+
+/* ---------- Mode buttons (portal-btn) tilt + shock ---------- */
+.portal-btn{ transform-style:preserve-3d; }
+.portal-btn .shock-ring{ position:absolute; inset:0; border-radius:inherit;
+  border:2px solid rgba(34,230,255,.7); pointer-events:none; opacity:0; }
+.portal-btn .shock-ring.fire{ animation:hvShock .55s ease-out; }
+@keyframes hvShock{ 0%{ opacity:.9; transform:scale(1); } 100%{ opacity:0; transform:scale(1.12); } }
+
+/* ---------- Arena judder + strike shake ---------- */
+.arena-judder{ animation:hvJudder 6s ease-in-out infinite; }
+@keyframes hvJudder{
+  0%,100%{ transform:translate(0,0); }
+  25%{ transform:translate(.4px,-.3px); }
+  50%{ transform:translate(-.3px,.4px); }
+  75%{ transform:translate(.3px,.2px); }
+}
+.arena-shake{ animation:hvShake .5s ease-out; }
+@keyframes hvShake{
+  0%{ transform:translate(0,0); }
+  15%{ transform:translate(-3px,2px); }
+  30%{ transform:translate(4px,-2px); }
+  45%{ transform:translate(-2px,3px); }
+  60%{ transform:translate(2px,-1px); }
+  100%{ transform:translate(0,0); }
+}
+
+/* Reduced motion: disable the heavy loops */
+@media (prefers-reduced-motion: reduce){
+  .arena-judder, .hv-halo, .hv-seal-ticks, .hv-rune-glyph{ animation:none!important; }
+}

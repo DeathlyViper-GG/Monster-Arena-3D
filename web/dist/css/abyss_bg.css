@@ -1,0 +1,147 @@
+/* =====================================================================
+   abyss_bg.css — Ethereal Abyss background for the singleplayer level
+   select screen. Ported from the React LevelScreen's SCREEN_CSS. Only
+   the background layers (plate, haze, vignette, grain, cursed ambience)
+   are ported; the Monster Arena level cards themselves are untouched.
+   Scoped to #overlaySingle.
+   ===================================================================== */
+
+/* The screen's base void replaces the generic .overlay backdrop. */
+#overlaySingle{
+  background-color:#08090a;
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(52,26,88,.5), transparent 62%),
+    radial-gradient(90% 60% at 50% 112%, rgba(4,44,58,.42), transparent 66%),
+    linear-gradient(180deg,#08090a 0%,#0b0912 46%,#05060a 100%);
+  backdrop-filter:none;
+}
+/* The central panel becomes invisible so the abyss shows behind the cards. */
+#overlaySingle .card{
+  position:relative; z-index:1;
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+}
+
+.abyss-bg{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+
+.abyss-plate{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  object-position:center 32%; opacity:.4; filter:saturate(.85) contrast(1.04);
+}
+.abyss-haze{
+  position:absolute; inset:0;
+  background-image:
+    radial-gradient(60% 45% at 20% 30%, rgba(96,42,168,.2), transparent 70%),
+    radial-gradient(55% 40% at 82% 68%, rgba(0,190,220,.15), transparent 72%);
+  animation:abyss-haze-drift 26s ease-in-out infinite;
+  transform:translate3d(0,0,0);
+}
+@keyframes abyss-haze-drift{
+  0%,100%{ transform:translate3d(-2%,0,0) scale(1.06); }
+  50%{ transform:translate3d(2%,-1.5%,0) scale(1.12); }
+}
+.abyss-vignette{
+  position:absolute; inset:0;
+  background-image:
+    radial-gradient(120% 90% at 50% 42%, transparent 34%, rgba(3,4,8,.7) 78%, #05060a 100%),
+    linear-gradient(180deg, rgba(5,6,10,.86) 0%, transparent 24%, transparent 60%, rgba(5,6,10,.92) 100%);
+}
+.abyss-grain{
+  position:absolute; inset:0; opacity:.05; mix-blend-mode:overlay; background-repeat:repeat;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Cursed ambience: veil, heroic aura, particles ---------- */
+.cursed-ambience{ position:absolute; inset:0; overflow:hidden; isolation:isolate; }
+.cursed-veil{
+  position:absolute; inset:-12%; filter:blur(2px);
+  background-image:
+    radial-gradient(46% 38% at 16% 84%, rgba(120,40,190,.4), transparent 70%),
+    radial-gradient(42% 34% at 86% 78%, rgba(190,28,48,.32), transparent 72%),
+    radial-gradient(38% 30% at 62% 10%, rgba(0,190,220,.2), transparent 72%);
+  animation:abyss-veil-breathe 17s ease-in-out infinite;
+}
+@keyframes abyss-veil-breathe{
+  0%,100%{ opacity:.6; transform:translate3d(0,0,0) scale(1); }
+  50%{ opacity:1; transform:translate3d(0,-1.4%,0) scale(1.06); }
+}
+.heroic-aura{
+  position:absolute; inset:8% -6% auto -6%; height:74%;
+  background-image:
+    radial-gradient(60% 52% at 50% 62%, rgba(0,245,255,.18), transparent 72%),
+    radial-gradient(40% 40% at 50% 98%, rgba(255,206,122,.14), transparent 74%);
+  animation:abyss-heroic-breathe 9.5s ease-in-out infinite;
+}
+@keyframes abyss-heroic-breathe{
+  0%,100%{ opacity:.45; }
+  50%{ opacity:.85; }
+}
+
+.cursed-particle{ position:absolute; border-radius:999px; opacity:0; mix-blend-mode:screen; will-change:transform,opacity; }
+.cursed-ember{
+  background-image:radial-gradient(circle,#ffffff 0%, rgba(196,122,255,.95) 40%, rgba(90,20,160,0) 74%);
+  box-shadow:0 0 16px 4px rgba(170,90,255,.75);
+  animation:abyss-curse-rise linear infinite;
+}
+.cursed-wisp{
+  background-image:radial-gradient(circle,#ffffff 0%, rgba(0,245,255,.9) 45%, rgba(0,160,200,0) 76%);
+  box-shadow:0 0 14px 3px rgba(0,230,255,.5);
+  animation:abyss-curse-drift linear infinite;
+}
+.cursed-drip{
+  border-radius:40% 40% 999px 999px;
+  background-image:linear-gradient(180deg, rgba(255,170,130,1), rgba(210,30,40,.35));
+  box-shadow:0 0 12px 2px rgba(255,70,60,.55);
+  animation:abyss-curse-fall linear infinite;
+}
+.cursed-spark{
+  border-radius:2px;
+  background-image:linear-gradient(120deg,#fff6d8, rgba(255,140,40,.85));
+  box-shadow:0 0 16px 3px rgba(255,160,60,.7);
+  animation:abyss-curse-flare ease-in-out infinite;
+}
+@keyframes abyss-curse-rise{
+  0%{ transform:translate3d(0,26px,0) scale(.4); opacity:0; }
+  12%{ opacity:1; }
+  48%{ opacity:.7; }
+  76%{ opacity:.95; }
+  100%{ transform:translate3d(var(--drift,0px),-340px,0) scale(.15); opacity:0; }
+}
+@keyframes abyss-curse-drift{
+  0%{ transform:translate3d(-90px,0,0) scale(.6); opacity:0; }
+  20%{ opacity:.75; }
+  80%{ opacity:.55; }
+  100%{ transform:translate3d(150px,var(--drift,0px),0) scale(.45); opacity:0; }
+}
+@keyframes abyss-curse-fall{
+  0%{ transform:translate3d(0,-40px,0) scale(.75); opacity:0; }
+  16%{ opacity:1; }
+  70%{ opacity:.7; }
+  100%{ transform:translate3d(var(--drift,0px),320px,0) scaleX(.5) scaleY(1.9); opacity:0; }
+}
+@keyframes abyss-curse-flare{
+  0%,100%{ transform:rotate(0deg) scale(.4); opacity:0; }
+  18%{ opacity:1; }
+  45%{ transform:rotate(140deg) scale(1.3); opacity:.5; }
+  62%{ opacity:1; }
+  84%{ transform:rotate(225deg) scale(1.1); opacity:.65; }
+}
+
+/* WebGL host for the three.js arcane rings + embers (sits above haze, below vignette) */
+.abyss-webgl-host{ position:absolute; inset:0; pointer-events:none; }
+.abyss-webgl-host canvas{ display:block; }
+
+/* Ornamental rune divider filling the band between the level cards and the footer text */
+.abyss-divider{ flex:1 1 auto; display:flex; align-items:center; gap:14px; min-height:30px; opacity:.85; pointer-events:none; }
+.ad-line{ flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(126,244,255,.5) 50%, transparent); }
+.ad-sigil{ position:relative; width:16px; height:16px; animation:abyss-sigil-spin 9s linear infinite; }
+.ad-sigil .ad-core{ position:absolute; inset:0; transform:rotate(45deg); border:1px solid rgba(0,245,255,.75); box-shadow:0 0 16px rgba(0,245,255,.6), inset 0 0 8px rgba(0,245,255,.4); }
+.ad-sigil .ad-core::after{ content:""; position:absolute; inset:3px; border:1px solid rgba(170,250,255,.45); }
+@keyframes abyss-sigil-spin{ to{ transform:rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+  .abyss-haze, .cursed-veil, .heroic-aura, .cursed-particle{ animation:none !important; }
+  .cursed-particle{ opacity:.4; }
+  .ad-sigil{ animation:none !important; }
+}
