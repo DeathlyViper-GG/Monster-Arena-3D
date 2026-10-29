@@ -587,6 +587,17 @@
 
   // ============================================================== RESIZE / RT
   R.resize = function (cssW, cssH, dpr) {
+console.error("RESIZE DEBUG", {
+  cssW,
+  cssH,
+  dpr,
+  cw: R.cw,
+  ch: R.ch,
+  innerWidth: window.innerWidth,
+  innerHeight: window.innerHeight,
+  clientWidth: R.canvas?.clientWidth,
+  clientHeight: R.canvas?.clientHeight
+});
     const gl = R.gl; if (!gl) return;
     if (cssW) {
   R.cw = cssW;
@@ -607,7 +618,7 @@ const sc = R.q.scale * (R.dpr || 1) * (R.dynScale || 1);
     const h = Math.min(8192, Math.max(64, Math.floor(cssH * sc)));
     const key = w + 'x' + h + R.qName;
     if (key === R.sizeKey) return; R.sizeKey = key;
-    R.canvas.width = w; R.canvas.height = h; R.W = w; R.H = h; R.aspect = w / h;
+    R.canvas.width = w; R.canvas.height = h; R.W = w; R.H = h; console.error("CANVAS SIZE", { w, h }); R.aspect = w / h;
     for (const k of ['hdr', 'ms', 'bl']) { if (k === 'bl') { (R.bl || []).forEach(r => freeRT(gl, r)); } else freeRT(gl, R[k]); }
     const flt = R.extFloat;
     R.hdr = makeRT(gl, w, h, { float: flt, depth: true });
