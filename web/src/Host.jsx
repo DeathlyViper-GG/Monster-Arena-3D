@@ -4,6 +4,7 @@
 // supports). The game iframe posts the three cinematic cutscene triggers;
 // this host overlays the identical React + three.js cutscenes so Story mode
 // and the death screen play exactly as they do on the Base44 link.
+import './host.css';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import CursedCasketScene from '@/components/casketCutscene/CasketScene';
 import CasketDialogue from '@/components/casketCutscene/CasketDialogue';
@@ -68,15 +69,15 @@ export default function Host() {
   return (
     <>
       <iframe
-        ref={iframeRef}
+        ref__={iframeRef}
         src={`/game.html${qs}`}
         title="Monster Arena"
         className="fixed inset-0 w-full h-full"
-        style={{ border: 0 }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', border: 0, zIndex: 0, background: '#000' }}
         allow="autoplay; fullscreen; gamepad"
       />
       {casketPlaying && (
-        <div className="fixed inset-0 z-[100] bg-black">
+        <div className="fixed inset-0 z-[100] bg-black" style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#000' }}>
           <CursedCasketScene playing restartToken={restartToken} onLoop={handleLoop} />
           <button
             onClick={() => handleLoop()}
@@ -92,7 +93,7 @@ export default function Host() {
       )}
       {hearthIntroPlaying && <HearthWardenIntroStage onDone={handleHearthIntroDone} />}
       {deathPlaying && (
-        <div className="fixed inset-0 z-[110] bg-black">
+        <div className="fixed inset-0 z-[110] bg-black" style={{ position: 'fixed', inset: 0, zIndex: 110, background: '#000' }}>
           <DeathScreen onRise={handleDeathRise} onHome={handleDeathHome} />
         </div>
       )}
