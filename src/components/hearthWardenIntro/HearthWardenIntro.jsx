@@ -1804,10 +1804,18 @@ function createCutscene({ canvas, container }) {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
-  // // composer.addPass(bloom);
-  // const cinematic = new ShaderPass(CinematicShader);
-  // // composer.addPass(cinematic);
+  // The bloom pass is optional: if the addon can't be constructed (stripped
+  // builds, limited GPU contexts) the cutscene still plays, just unbloomed.
+  let bloom = null;
+  try {
+    bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.62, 0.72);
+    composer.addPass(bloom);
+  } catch (err) {
+    bloom = null;
+    console.warn('[HearthWarden] bloom pass unavailable — playing without it', err);
+  }
+  const cinematic = new ShaderPass(CinematicShader);
+  composer.addPass(cinematic);
 
   const state = { stage: 0, time: 0, stageTime: 0, flash: 0 };
   const clock = new THREE.Clock();
@@ -1825,7 +1833,7 @@ function createCutscene({ canvas, container }) {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
-    // // bloom.setSize(width, height);
+    if (bloom) bloom.setSize(width, height);
   }
 
   const resizeObserver = new ResizeObserver(resize);
@@ -1892,16 +1900,16 @@ function createCutscene({ canvas, container }) {
 
     updateCamera(time, p1, p2);
 
-    // // bloom.strength disabled for debugging
+    if (bloom) bloom.strength = 0.6 + state.flash * 1.3 + morph * 0.18;
     renderer.toneMappingExposure = 1.06 + state.flash * 0.4;
 
-    // // cinematic disabled
-    // // cinematic disabled
-    // // cinematic disabled
-    // // cinematic disabled
-    // // cinematic disabled
+    cinematic.uniforms.uTime.value = time;
+    cinematic.uniforms.uFlash.value = state.flash * 0.6;
+    cinematic.uniforms.uVignette.value = 0.9 + morph * 0.12;
+    cinematic.uniforms.uAberration.value = 0.0013 + state.flash * 0.006 + morph * 0.0012;
+    cinematic.uniforms.uGrain.value = 0.028 + state.flash * 0.04;
 
-    renderer.render(scene, camera);
+    composer.render();
   }
 
   renderer.setAnimationLoop(frame);
@@ -1918,8 +1926,8 @@ function createCutscene({ canvas, container }) {
     renderer.setAnimationLoop(null);
     resizeObserver.disconnect();
     disposeScene(scene);
-    // // bloom.dispose();
-    // // cinematic.dispose();
+    if (bloom) bloom.dispose();
+    cinematic.dispose();
     composer.dispose();
     renderer.dispose();
   }
