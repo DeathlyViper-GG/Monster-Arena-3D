@@ -1901,6 +1901,7 @@ function createCutscene({ canvas, container }) {
     cinematic.uniforms.uAberration.value = 0.0013 + state.flash * 0.006 + morph * 0.0012;
     cinematic.uniforms.uGrain.value = 0.028 + state.flash * 0.04;
 
+    cinematic.enabled = false;
     composer.render();
   }
 
