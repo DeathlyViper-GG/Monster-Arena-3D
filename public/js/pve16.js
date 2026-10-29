@@ -2333,22 +2333,32 @@
 
   // Resize --------------------------------------------------------------------
   function resize(){
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-    // Backing store in device pixels
-    canvas.width  = Math.floor(window.innerWidth  * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
+  canvas.width  = Math.floor(window.innerWidth * dpr);
+  canvas.height = Math.floor(window.innerHeight * dpr);
 
-    // Draw in CSS pixel coordinates
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // ADD THESE LINES
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
 
-    // ✅ Store CSS viewport size for camera math
-    const rect = canvas.getBoundingClientRect();
-    VIEW.w = rect.width;
-    VIEW.h = rect.height;
-    VIEW.dpr = dpr;
-    if (window.Render3D && Render3D.ok) Render3D.resize(VIEW.w, VIEW.h, dpr);
+  const canvas3d = document.getElementById('game3d');
+  if (canvas3d) {
+    canvas3d.style.width = window.innerWidth + 'px';
+    canvas3d.style.height = window.innerHeight + 'px';
   }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const rect = canvas.getBoundingClientRect();
+  VIEW.w = rect.width;
+  VIEW.h = rect.height;
+  VIEW.dpr = dpr;
+
+  if (window.Render3D && Render3D.ok) {
+    Render3D.resize(VIEW.w, VIEW.h, dpr);
+  }
+}
   window.addEventListener('resize', resize);
   resize();
 
