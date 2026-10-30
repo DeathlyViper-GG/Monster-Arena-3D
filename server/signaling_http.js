@@ -8,7 +8,12 @@
 */
 
 import express from "express";
-import { initBots, updateBots, bakeBotsSnapshot } from "./bots.js";
+import {
+  initBots, updateBots, bakeBotsSnapshot,
+  attachHazards, applyEnemyHazards,
+  isTeamMode, pickTeam, fillTeamsWithBots, initTeamMatch,
+  tickTeamMatch, resolveTeamBullets, bakeTeamSnapshot, bakeTeamBots
+} from "./bots.js";
 import { GLYPH_KEYS, makeGlyphState, tickEnemyGlyphStatus, glyphMoveMul, applyGlyphHit, applyGlyphKill, thornmailReflect } from "./glyph.js";
 import cors from "cors";
 import path from "path";
@@ -298,125 +303,10 @@ function weightedPick(weights){
 }
 
 // -----------------------------------------------------------------------------
-// Hazard helpers (SERVER-SIDE) — apply to enemies too
+// Hazard helpers (SERVER-SIDE) — applied to enemies too.
+// They live in hazards.js; the helpers they need are injected after the shared
+// world/collision helpers below (see attachHazards()).
 // -----------------------------------------------------------------------------
-function hazardAt(lobby, x, y, r){
-  const hz = lobby.world?.hazards || [];
-  for (const h of hz){
-    if (circleRectCollide(x, y, r, h)) return h;
-  }
-  return null;
-}
-
-// Quicksand-like pull (server version)
-function applySandToEnemy(lobby, e, hz, dt){
-  const cx = hz.x + hz.w / 2;
-  const cy = hz.y + hz.h / 2;
-  const dx = cx - e.x;
-  const dy = cy - e.y;
-  const dist = Math.hypot(dx, dy) + 1e-6;
-
-  const rx = dx / dist, ry = dy / dist; // toward center
-  const tx = -ry, ty = rx;              // tangential
-
-  const maxR = Math.hypot(hz.w, hz.h) * 0.6;
-  const closeness = Math.max(0, Math.min(1, 1 - dist / maxR));
-
-  const swirl = 120 + 240 * closeness;
-  const pull  =  30 + 180 * closeness;
-
-  const vx = tx * swirl + rx * pull;
-  const vy = ty * swirl + ry * pull;
-
-  moveEnemyWithCollide(lobby, e, vx * dt, vy * dt);
-}
-
-// Ice drift (server version)
-function applyIceToEnemy(lobby, e, hz, dt){
-  const t = now() / 1000;
-  const seed = (hz.x * 0.013 + hz.y * 0.017);
-  const dir = (seed * Math.PI * 2) + Math.sin(t * 0.6 + seed) * 0.9;
-  const breath = 0.85 + 0.15 * Math.sin(t * 1.1 + seed * 2.3);
-  const slideSpeed = 180 * breath;
-
-  moveEnemyWithCollide(lobby, e, Math.cos(dir) * slideSpeed * dt, Math.sin(dir) * slideSpeed * dt);
-}
-
-// Void: 50/50 teleport or kill (server authoritative)
-function applyVoidToEnemy(lobby, e, hz){
-  e.voidCD = Math.max(0, (e.voidCD || 0));
-  if (e.voidCD > 0) return { killed:false };
-
-  const teleport = (Math.random() < 0.5);
-  if (teleport){
-    const holes = (lobby.world?.hazards || []).filter(h => h.type === 'void' && h !== hz);
-    if (holes.length){
-      const tgt = holes[(Math.random() * holes.length) | 0];
-      const cx = tgt.x + tgt.w / 2, cy = tgt.y + tgt.h / 2;
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.min(tgt.w, tgt.h) * 0.22;
-      e.x = clamp(cx + Math.cos(a) * r, e.r, WORLD.w - e.r);
-      e.y = clamp(cy + Math.sin(a) * r, e.r, WORLD.h - e.r);
-      e.voidCD = 0.6;
-      return { killed:false };
-    }
-  }
-
-  // kill if teleport not possible or 50% kill roll
-  e.hp = 0;
-  return { killed:true };
-}
-
-// Apply hazard effects to an enemy; return true if enemy should be removed
-function applyEnemyHazards(lobby, e, dt){
-  e.voidCD = Math.max(0, (e.voidCD || 0) - dt);
-
-  const hz = hazardAt(lobby, e.x, e.y, (e.r || 16) * 0.9);
-  if (!hz) return false;
-
-  if (hz.type === 'sand'){
-    applySandToEnemy(lobby, e, hz, dt);
-    return false;
-  }
-
-  if (hz.type === 'ice'){
-    applyIceToEnemy(lobby, e, hz, dt);
-    return false;
-  }
-
-  if (hz.type === 'lava') {
-
-    const phase = hz.phase;
-
-    // 🔔 Warning: no damage
-    if (phase === 'warn') {
-      return false;
-    }
-
-    // 🌋 Eruption: instant kill
-    if (phase === 'eruption') {
-      e.hp = 0;
-      return true;
-    }
-
-    // 🔥 Burning ground: chip damage only
-    if (phase === 'burn') {
-      e.hp -= 20 * dt;
-      return false;
-    }
-
-    // 🧱 Cool phase: harmless
-    return false;
-  }
-
-  if (hz.type === 'void'){
-    return applyVoidToEnemy(lobby, e, hz).killed;
-  }
-
-  // unknown hazard -> lethal
-  e.hp = 0;
-  return true;
-}
 
 function weightsForWave(w){
   // Difficulty composition curve
@@ -567,6 +457,9 @@ function worldDelta(lobby, force = false, clientWorldKey = '') {
 // -----------------------------------------------------------------------------
 const now = () => Date.now();
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// hazard effects live in bots.js helpers — hand them the shared functions
+attachHazards({ WORLD, clamp, now, circleRectCollide, moveEnemyWithCollide });
 const dist2 = (ax, ay, bx, by) => {
   const dx = ax - bx, dy = ay - by;
   return dx * dx + dy * dy;
@@ -1003,6 +896,13 @@ function createLobby(mode, startTimeOverride = null) {
 
     players: new Map(),
     inputs: new Map(),
+
+    // Teams / Capture the Flag objectives (null until the match starts)
+    giants: null,
+    golems: [],
+    ctf: null,
+    winner: null,
+    chat: [],
 
     bullets: [],
     wave: 1,
@@ -1745,7 +1645,11 @@ app.post('/functions/game_server', (req, res) => {
     const name = sanitizeNameOp(body.name || body.nickname) || ('Player' + String(peerId).slice(0, 4));
 
     if (op === 'join') {
-      const mode = String(body.mode || '').toLowerCase() === 'pvp' ? 'pvp' : 'pve';
+      const rawMode = String(body.mode || '').toLowerCase();
+      const mode = rawMode === 'pvp' ? 'pvp'
+        : rawMode === 'teams' ? 'teams'
+        : rawMode === 'ctf' ? 'ctf'
+        : 'pve';
       let lobby;
       if (validLobbyOp(body.lobbyId)) {
         lobby = LOBBIES.get(body.lobbyId);
@@ -1761,12 +1665,22 @@ app.post('/functions/game_server', (req, res) => {
         if (!lobby.scores) lobby.scores = new Map();
         if (!lobby.scores.has(peerId)) lobby.scores.set(peerId, 0);
       }
+      // Teams / CTF: seat the player on the side they asked for (same side as
+      // a friend = team up), then top both rosters up with bots.
+      let team = null;
+      if (isTeamMode(lobby.mode)) {
+        const me = lobby.players.get(peerId);
+        const pref = (body.team === 0 || body.team === 1) ? body.team : null;
+        if (me) { if (me.team !== 0 && me.team !== 1) me.team = pickTeam(lobby, pref); team = me.team; }
+        fillTeamsWithBots(lobby);
+      }
       flushWaiters(lobby);
       return res.json({
-        lobbyId: lobby.id, peerId, mode, name,
+        lobbyId: lobby.id, peerId, mode: lobby.mode, name,
         startTime: lobby.startTime, world: WORLD,
         levelId: lobby.levelId, mapSeed: lobby.mapSeed,
-        worldKey: lobby.worldKey, isHost: false
+        worldKey: lobby.worldKey, isHost: false,
+        team
       });
     }
 
@@ -1810,15 +1724,16 @@ app.post('/functions/game_server', (req, res) => {
         if (!player) return res.status(403).json({ ok:false, error:'Not in lobby' });
         const speed = Math.min(1400, Number(body.speed) || 800);
         const dmg = Math.min(80, Number(body.dmg) || 12);
-        lobby.bullets.push({ owner:peerId, x:Number(body.x), y:Number(body.y), vx:Math.cos(Number(body.ang))*speed, vy:Math.sin(Number(body.ang))*speed, r:4, dmg, life:1.2 });
+        lobby.bullets.push({ owner:peerId, team:(player.team ?? null), x:Number(body.x), y:Number(body.y), _x0:Number(body.x), _y0:Number(body.y), vx:Math.cos(Number(body.ang))*speed, vy:Math.sin(Number(body.ang))*speed, r:4, dmg, life:1.2 });
         player.lastShotAt = now(); player.lastSeen = now();
         return res.json({ ok:true });
       }
       case 'hit': {
         if (!player) return res.status(403).json({ ok:false, error:'Not in lobby' });
-        if (lobby.mode === 'pvp' && body.kind === 'melee') {
+        if ((lobby.mode === 'pvp' || isTeamMode(lobby.mode)) && body.kind === 'melee') {
           const victim = lobby.players.get(body.target);
-          if (victim && peerId !== body.target) {
+          const friendly = isTeamMode(lobby.mode) && victim && victim.team === player.team;
+          if (victim && peerId !== body.target && !friendly) {
             const RANGE = 120;
             if (dist2(player.x, player.y, victim.x, victim.y) <= (RANGE + 16) * (RANGE + 16)) {
               let dd = Math.max(0, Math.min(60, Number(body.dmg) || 0));
@@ -1939,6 +1854,17 @@ app.post('/functions/game_server', (req, res) => {
         flushWaiters(lobby);
         return res.json({ ok:true, chestId: ch.id, drops });
       }
+      case 'chat': {
+        // Lobby / in-match chat: messages ride the authoritative snapshot every
+        // client already polls, so anonymous players stay in sync.
+        const text = String(body.text || '').replace(/[<>]/g, '').slice(0, 140).trim();
+        if (text) {
+          if (!Array.isArray(lobby.chat)) lobby.chat = [];
+          lobby.chat.push({ t: now(), id: peerId, name: (player && player.name) || name, text });
+          if (lobby.chat.length > 60) lobby.chat = lobby.chat.slice(-60);
+        }
+        return res.json({ ok: true });
+      }
       case 'leave':
         lobby.players.delete(peerId); lobby.inputs.delete(peerId);
         if (lobby.scores) lobby.scores.delete(peerId);
@@ -1982,7 +1908,12 @@ setInterval(() => {
     // Compute dt first (safe)
     // ✅ Fixed dt (prevents integration drift under load)
     const dt = TICK_MS / 1000;
-    updateBots(lobby, dt, TICK_MS, moveEnemyWithCollide);
+    if (isTeamMode(lobby.mode)) {
+      // teams / ctf only fight once the countdown has finished
+      if (lobby.started) tickTeamMatch(lobby, dt, moveEnemyWithCollide);
+    } else {
+      updateBots(lobby, dt, TICK_MS, moveEnemyWithCollide);
+    }
     lobby.lastTick = t;
     // ============================
     // GLYPH PHASE TIMER (PER LOBBY)
@@ -2059,9 +1990,12 @@ setInterval(() => {
       }
 
       // ✅ ONLY INIT AFTER VALID WORLD
-      initBots(lobby);
-
-
+      if (isTeamMode(lobby.mode)) {
+        // Teams / CTF field their own bot rosters, titans, golems and flags.
+        initTeamMatch(lobby);
+      } else {
+        initBots(lobby);
+      }
 
       lobby.started = true;
 
@@ -2083,6 +2017,8 @@ setInterval(() => {
         players: [...lobby.players.values()],
         enemies: [],
         bullets: [],
+        chat: lobby.chat || [],
+        ...bakeTeamSnapshot(lobby),
         scores: lobby.scores ? Object.fromEntries(lobby.scores.entries()) : {},
         // ✅ only send world when it changes
         world: worldDelta(lobby, true),
@@ -2433,6 +2369,9 @@ setInterval(() => {
         continue;
       }
     }
+
+    // Teams / CTF: bullets vs the enemy titan, golems and the other side.
+    if (isTeamMode(lobby.mode)) resolveTeamBullets(lobby);
     
     // ---- Bullet hits enemies (PvE) ----
     if (lobby.mode === 'pve') {
@@ -2484,7 +2423,8 @@ setInterval(() => {
         }
       }
     }
-    removeDeadPlayers(lobby);
+    // Team modes respawn their players instead of dropping them from the lobby.
+    if (!isTeamMode(lobby.mode)) removeDeadPlayers(lobby);
 
     // Snapshot
     // Snapshot
@@ -2493,7 +2433,7 @@ setInterval(() => {
       mode: lobby.mode,
       wave: lobby.wave,
 
-      bots: bakeBotsSnapshot(lobby),
+      bots: isTeamMode(lobby.mode) ? bakeTeamBots(lobby) : bakeBotsSnapshot(lobby),
       
       phase: lobby.gamePhase,
       glyphTime: lobby.gamePhase === 'glyph' ? lobby.glyphTimer : 0,
@@ -2502,6 +2442,12 @@ setInterval(() => {
       enemies: lobby.mode === 'pve' ? lobby.enemies : [],
       bullets: lobby.bullets,
       pickups: lobby.pickups,
+
+      // 💬 chat rides the snapshot so every client stays in sync
+      chat: lobby.chat || [],
+
+      // ⚔ teams / ctf objectives (titans, golems, bases, flags, scores)
+      ...bakeTeamSnapshot(lobby),
 
       // ✅ leaderboard points (playerId -> points)
       scores: lobby.scores ? Object.fromEntries(lobby.scores.entries()) : {},
