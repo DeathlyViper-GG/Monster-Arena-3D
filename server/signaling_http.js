@@ -1664,10 +1664,45 @@ app.post('/functions/game_server', (req, res) => {
       case 'setDesign':
         if (player && Number.isInteger(body.design) && body.design >= 0 && body.design <= 14) player.design = body.design;
         flushWaiters(lobby); return res.json({ ok:true });
+      case 'setMode': {
+        // Only the host chooses the mode, and only before the match starts.
+        if (lobby.hostId && lobby.hostId !== peerId) return res.status(403).json({ ok:false, error:'Only the host can change the mode' });
+        if (lobby.started) return res.status(409).json({ ok:false, error:'Already started' });
+        const wantMode = String(body.mode || '').toLowerCase();
+        if (!['pve','pvp','teams','ctf'].includes(wantMode)) return res.status(400).json({ ok:false, error:'Bad mode' });
+        if (wantMode !== lobby.mode) {
+          lobby.mode = wantMode;
+          if (lobby.snapshot) { lobby.snapshot.mode = wantMode; if (lobby.snapshot.meta) lobby.snapshot.meta.mode = wantMode; }
+          // Wipe the old mode's state so the new one starts clean.
+          lobby.winner = null;
+          lobby.enemies = [];
+          lobby.spawnQueue = [];
+          lobby.bullets = [];
+          lobby.giants = null;
+          lobby.golems = [];
+          lobby.ctf = null;
+          lobby.bots = [];
+          lobby.scores = new Map();
+          let seat = 0;
+          for (const p of lobby.players.values()) {
+            p.team = null;
+            p.hp = p.hpMax ?? 100;
+            p.respawnAt = 0;
+            p.carrying = false;
+            lobby.scores.set(p.id, 0);
+            if (isTeamMode(wantMode)) p.team = (seat++ % 2);
+          }
+          if (isTeamMode(wantMode)) fillTeamsWithBots(lobby);
+        }
+        flushWaiters(lobby);
+        return res.json({ ok:true, mode: lobby.mode });
+      }
       case 'start': {
         // Only the host may launch a private lobby.
         if (lobby.hostId && lobby.hostId !== peerId) return res.status(403).json({ ok:false, error:'Only the host can start' });
         if (lobby.started) return res.json({ ok:true, already:true, lobbyId: lobby.id });
+        // A map must be chosen before the match can launch.
+        if (lobby.levelId == null && !Number.isInteger(body.levelId)) return res.status(400).json({ ok:false, error:'Select a map before starting' });
         if (lobby.levelId == null) {
           lobby.levelId = Number.isInteger(body.levelId) ? body.levelId : 1;
           if (lobby.mapSeed == null) lobby.mapSeed = Math.floor(Math.random() * 2**31);

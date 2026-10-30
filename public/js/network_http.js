@@ -79,6 +79,14 @@
     },
 
     // Host-only: launch the lobby the creator is sharing.
+    // Host-only: switch the lobby's mode (pre-start).
+    async setMode(mode) {
+      if (!this.state.lobbyId || !this.state.peerId) return { ok:false };
+      const j = await post({ op: "setMode", lobbyId: this.state.lobbyId, peerId: this.state.peerId, mode });
+      if (j && j.mode) this.state.meta = { ...(this.state.meta || {}), mode: j.mode };
+      return j;
+    },
+
     async start(levelId) {
       if (!this.state.lobbyId || !this.state.peerId) return { ok:false };
       return post({ op: "start", lobbyId: this.state.lobbyId, peerId: this.state.peerId, levelId });

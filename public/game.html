@@ -979,7 +979,7 @@
 <script src="js/themed_buildings.js?v=1"></script>
 <script src="js/render3d_fx.js?v=26"></script>
 <script src="js/melee_sprites.js?v=2"></script>
-<script src="js/network_http.js"></script>
+<script src="js/network_http.js?v=2"></script>
 <script src="js/lobby_chat.js?v=1"></script>
 <script src="js/bot_sp.js?v=14"></script>
 <script src="js/building_catalog.js?v=9"></script>
@@ -1288,7 +1288,13 @@
     if (window.Teams && window.Teams.reset) window.Teams.reset();
     if (window.CTF && window.CTF.reset) window.CTF.reset();
     window.MENU_CONTEXT = 'multi';
+    // Fresh visit: the host must choose a mode and a map again.
+    window.MP_MODE_PICKED = false;
+    window.MP_MAP_ID = null;
+    document.querySelectorAll('#overlayHome .modeCard').forEach((c) => c.classList.remove('active'));
     showOverlay('overlayHome');
+    applyLobbyRole();
+    refreshStartGate();
   });
 
 
@@ -1379,6 +1385,7 @@
     document.body.classList.add('mode-pve');
 
     moveLevelsToMulti();
+    pickMpMode('pve');
   });
 
   document.getElementById('modePvP')?.addEventListener('click', () => {
@@ -1391,17 +1398,15 @@
     document.body.classList.add('mode-pvp');
 
     moveLevelsToMulti();
+    pickMpMode('pvp');
   });
 
   // ---- Teams / Capture the Flag (bots backfill both sides) ----
   function selectTeamMode(mode) {
-    selectedMode = mode;
     window.MENU_CONTEXT = 'multi';
     localStorage.setItem('arenaMode', mode);
-    document.querySelectorAll('#overlayHome .modeCard').forEach((c) => c.classList.remove('active'));
-    const card = document.getElementById(mode === 'teams' ? 'modeTeams' : 'modeCTF');
-    if (card) card.classList.add('active');
     moveLevelsToMulti();
+    pickMpMode(mode);
   }
   document.getElementById('modeTeams')?.addEventListener('click', () => selectTeamMode('teams'));
   document.getElementById('modeCTF')?.addEventListener('click', () => selectTeamMode('ctf'));
@@ -1444,6 +1449,62 @@
     return !!(Net && Net.state && (Net.state.isHost || Net.state.meta?.isHost));
   }
 
+  // ---- Host start gate: a mode and a map must be chosen before launch ----
+  window.MP_MODE_PICKED = false;
+  window.MP_MAP_ID = null;
+
+  function pickMpMode(mode) {
+    const ids = { pve: 'modePvE', pvp: 'modePvP', teams: 'modeTeams', ctf: 'modeCTF' };
+    selectedMode = mode;
+    document.querySelectorAll('#overlayHome .modeCard').forEach((c) => c.classList.remove('active'));
+    const card = document.getElementById(ids[mode]);
+    if (card) card.classList.add('active');
+    window.MP_MODE_PICKED = true;
+    // Host changing the mode inside a lobby must change the lobby itself.
+    if (Net && Net.state && Net.state.lobbyId && Net.setMode) window._mpModeSync = Net.setMode(mode);
+    refreshStartGate();
+  }
+
+  function refreshStartGate() {
+    const btn = document.getElementById('mpStartBtn');
+    if (!btn || !mpIsHost()) return;
+    const missing = [];
+    if (!window.MP_MODE_PICKED) missing.push('a mode');
+    if (!Number.isInteger(window.MP_MAP_ID)) missing.push('a map');
+    const ready = missing.length === 0;
+    btn.disabled = !ready;
+    btn.style.opacity = ready ? '1' : '.45';
+    btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+    const status = document.getElementById('mpLobbyStatus');
+    if (status) {
+      status.textContent = ready
+        ? 'All set — press Start match when everyone is in.'
+        : 'Before you can start, choose ' + missing.join(' and ') + '.';
+    }
+  }
+
+  // The lobby's mode decides the match — never quietly fall back to PvE.
+  function applyNetMode(mode) {
+    const m = String(mode || 'pve').toLowerCase();
+    window.PVP_MODE = (m === 'pvp' || m === 'teams' || m === 'ctf');
+    window.TEAMS_MODE = (m === 'teams');
+    window.CTF_MODE = (m === 'ctf');
+    document.body.classList.toggle('mode-pvp', window.PVP_MODE);
+    document.body.classList.toggle('mode-pve', !window.PVP_MODE);
+  }
+
+  // Joiners get only the lobby: modes, maps and starting belong to the host.
+  function applyLobbyRole() {
+    const inLobby = !!(Net && Net.state && Net.state.lobbyId);
+    const controls = !inLobby || mpIsHost();
+    const show = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
+    show(document.getElementById('createLobbyBtn')?.closest('.row'), controls);
+    show(document.getElementById('joinLobbyBtn')?.closest('.row'), controls);
+    show(document.querySelector('#overlayHome .mp-mode-grid'), controls);
+    show(document.getElementById('mpTeamRow'), controls);
+    show(document.getElementById('multiLevelStrip'), controls);
+  }
+
   function showLobbyPanel() {
     const code = String(Net?.state?.lobbyId || '');
     const panel = document.getElementById('mpLobbyPanel');
@@ -1470,6 +1531,9 @@
         ? 'Share the code, then press Start when everyone is in.'
         : 'Waiting for the host to start…';
     }
+
+    refreshStartGate();
+    applyLobbyRole();
   }
 
   async function mpJoin(opts) {
@@ -1486,7 +1550,14 @@
     }
   }
 
-  document.getElementById('createLobbyBtn')?.addEventListener('click', () => mpJoin({ create: true }));
+  document.getElementById('createLobbyBtn')?.addEventListener('click', () => {
+    // The lobby is created in the chosen mode, so a mode pick comes first.
+    if (!window.MP_MODE_PICKED) {
+      alert('Pick a mode first — PvE, PvP, Teams or Capture the Flag.');
+      return;
+    }
+    mpJoin({ create: true });
+  });
 
   document.getElementById('joinLobbyBtn')?.addEventListener('click', () => {
     const code = (document.getElementById('mpJoinCode')?.value || '').trim().toUpperCase();
@@ -1505,11 +1576,18 @@
   });
 
   document.getElementById('mpStartBtn')?.addEventListener('click', async () => {
-    const lvl = parseInt(localStorage.getItem('arenaLevel') || localStorage.getItem('level') || '1', 10) || 1;
+    // No mode / map picked → the match cannot start.
+    if (!window.MP_MODE_PICKED || !Number.isInteger(window.MP_MAP_ID)) {
+      refreshStartGate();
+      return;
+    }
+    // Never launch before the host's mode change has reached the server.
+    if (window._mpModeSync) { await window._mpModeSync; window._mpModeSync = null; }
+    const lvl = window.MP_MAP_ID;
     const btn = document.getElementById('mpStartBtn');
     if (btn) btn.disabled = true;
     await Net.start(lvl);
-    if (btn) setTimeout(() => { btn.disabled = false; }, 1200);
+    if (btn) setTimeout(() => { btn.disabled = false; refreshStartGate(); }, 1200);
   });
 
   // Roster + status stay in sync from the authoritative lobby snapshot.
@@ -1528,6 +1606,8 @@
         ? list.length + ' in lobby — press Start when ready.'
         : 'Share the code with your friends.';
     }
+    refreshStartGate();
+    applyLobbyRole();
   });
 
   // The host pressed Start: the server flips meta.started and every client
@@ -1535,9 +1615,11 @@
   let _netLaunched = false;
   window.addEventListener('net:meta', (ev) => {
     const d = ev.detail || {};
-    if (!Net?.state?.lobbyId) { _netLaunched = false; return; }
+    if (!Net?.state?.lobbyId) { _netLaunched = false; applyLobbyRole(); return; }
     if (!d.started || _netLaunched) return;
     _netLaunched = true;
+    // The host's chosen mode is what gets played.
+    applyNetMode(d.mode);
     if (d.levelId != null) {
       localStorage.setItem('arenaLevel', String(d.levelId));
       localStorage.setItem('level', String(d.levelId));
@@ -1577,6 +1659,12 @@
           alert('Create or join a lobby first.');
           return;
         }
+        // The host's map pick — required before Start match unlocks.
+        if (card) {
+          const lid = parseInt(card.dataset.level, 10);
+          window.MP_MAP_ID = Number.isFinite(lid) ? lid : null;
+          refreshStartGate();
+        }
       }
 
       if (window.MENU_CONTEXT === 'single') {
@@ -1610,6 +1698,7 @@
   document.getElementById('backFromMulti')?.addEventListener('click', () => {
     window.MENU_CONTEXT = 'intro';
     showOverlay('overlayIntro');
+    applyLobbyRole();
   });
 
 
