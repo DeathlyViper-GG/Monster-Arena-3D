@@ -8113,13 +8113,12 @@ window.addEventListener('net:snapshot', (ev) => {
     // Corrected camera boundaries — keeps player visible at edges
     // Unclamped camera: always follow player (no boundary stop)
     updateCamera(dt);   
-    if (player.hp <= 0){
-      // one-time VFX trigger
+    if (player.hp <= 0 && !NetObjectives.respawnWait()){
       if (!state.playerExploded){
-        const baseCol = COLORS[selectedColor]?.c || '#aef';
-        spawnTriangleBurst(player.x, player.y, baseCol, { big:8, small:26 });
-        spawnGhostSilhouette(player.x, player.y, player.r + 14, currentTheme.accent);
-        state.playerExploded = true;
+        const baseCol=COLORS[selectedColor]?.c||'#aef';
+        spawnTriangleBurst(player.x,player.y,baseCol,{big:8,small:26});
+        spawnGhostSilhouette(player.x,player.y,player.r+14,currentTheme.accent);
+        state.playerExploded=true;
       }
 
       if (window.TEAMS_MODE && window.Teams && window.Teams.onPlayerDeath()){ state.playerExploded = false; } else if (window.CTF_MODE && window.CTF && window.CTF.onPlayerDeath()){ state.playerExploded = false; }
@@ -8295,7 +8294,7 @@ window.addEventListener('net:snapshot', (ev) => {
     me.ads = !!input.mouse.rdown && !IS_MOBILE && state.phase !== 'glyph'; me.lastShot = player.lastShot; me.reloadT = player.reloadT; me.ammo = player.ammo;
     // ---- entities (online: authoritative snapshot, offline: local sim)
     F.enemies = (online && snap && Array.isArray(snap.enemies)) ? snap.enemies : ents.enemies;
-    F.bots = (online && snap && Array.isArray(snap.bots)) ? snap.bots : SP_BOTS; F.teams = (window.TEAMS_MODE && window.Teams) ? Teams.snapshot() : null; F.ctf = (window.CTF_MODE && window.CTF) ? window.CTF.snapshot() : null;
+    F.bots = (online && snap && Array.isArray(snap.bots)) ? snap.bots : SP_BOTS; NetObjectives.frame(F, snapRaw);
     // remote players (same smoothing as the 2D path)
     F.remotes.length = 0;
     const rps = (online && snapRaw && Array.isArray(snapRaw.players)) ? snapRaw.players : null;
@@ -9665,10 +9664,8 @@ window.addEventListener('net:snapshot', (ev) => {
       ctx.restore();
     }
 
-    if (window.TEAMS_MODE && window.Teams) window.Teams.draw(ctx, cam, t); if (window.CTF_MODE && window.CTF) window.CTF.draw(ctx, cam, t);
-    // ---------------------------
+    if(window.TEAMS_MODE&&window.Teams)Teams.draw(ctx,cam,t); if(window.CTF_MODE&&window.CTF)CTF.draw(ctx,cam,t); NetObjectives.draw2D(ctx,cam);
     // Chests, minimap, HUD
-    // ---------------------------
     world.drawChests();
     if ((SIM_TICK & 7) === 0) {
       drawMinimap();

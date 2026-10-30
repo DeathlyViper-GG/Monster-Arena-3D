@@ -34,20 +34,23 @@
       return this.join(mode, nickname);
     },
 
-    async join(mode = "pve", nickname = null) {
+    async join(mode = "pve", nickname = null, team = null) {
       const nick = nickname || localStorage.getItem("arenaNick") || "Player";
       const urlLobby = new URLSearchParams(location.search).get("lobby");
       const res = await post({
         op: "join", mode, name: nick,
+        team: (team === 0 || team === 1) ? team : undefined,
         lobbyId: urlLobby || undefined
       });
       if (!res || res.error) throw new Error(res?.error || "join failed");
       this.state.lobbyId = res.lobbyId;
       this.state.peerId = res.peerId;
       this.state.myId = res.peerId;
+      this.state.team = (res.team === 0 || res.team === 1) ? res.team : null;
       this.state.meta = {
         lobbyId: res.lobbyId,
         mode: res.mode,
+        team: this.state.team,
         joinDeadline: res.startTime,
         levelId: res.levelId ?? null,
         mapSeed: res.mapSeed ?? null,
@@ -149,6 +152,13 @@
     async unlockGlyph(path, key) {
       if (!this.state.lobbyId || !this.state.peerId) return;
       return post({ op: "glyphUnlock", lobbyId: this.state.lobbyId, peerId: this.state.peerId, path, key });
+    },
+
+    sendChat(text) {
+      if (!this.state.lobbyId || !this.state.peerId) return;
+      const body = String(text || "").slice(0, 140);
+      if (!body.trim()) return;
+      post({ op: "chat", lobbyId: this.state.lobbyId, peerId: this.state.peerId, text: body });
     },
 
     sendHit(target, x, y, dmg, kind = "") {
