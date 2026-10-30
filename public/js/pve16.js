@@ -2333,35 +2333,22 @@
 
   // Resize --------------------------------------------------------------------
   function resize(){
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-  canvas.width  = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
+    // Backing store in device pixels
+    canvas.width  = Math.floor(window.innerWidth  * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
 
-  // ADD THESE LINES
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
+    // Draw in CSS pixel coordinates
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const canvas3d = document.getElementById('game3d');
-if (canvas3d) {
-  canvas3d.width = Math.floor(window.innerWidth * dpr);
-  canvas3d.height = Math.floor(window.innerHeight * dpr);
-
-  canvas3d.style.width = window.innerWidth + 'px';
-  canvas3d.style.height = window.innerHeight + 'px';
-}
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const rect = canvas.getBoundingClientRect();
-  VIEW.w = rect.width;
-  VIEW.h = rect.height;
-  VIEW.dpr = dpr;
-
-  if (window.Render3D && Render3D.ok) {
-    Render3D.resize(VIEW.w, VIEW.h, dpr);
+    // ✅ Store CSS viewport size for camera math
+    const rect = canvas.getBoundingClientRect();
+    VIEW.w = rect.width;
+    VIEW.h = rect.height;
+    VIEW.dpr = dpr;
+    if (window.Render3D && Render3D.ok) Render3D.resize(VIEW.w, VIEW.h, dpr);
   }
-}
   window.addEventListener('resize', resize);
   resize();
 
@@ -2462,8 +2449,7 @@ if (canvas3d) {
           const R = (v.r ?? 60);
           for (const e of ents.enemies){
             if (dist2(e.x,e.y,v.x,v.y) <= (R + (e.r??16))*(R + (e.r??16))){
-              e.hp -= 7 * dt;
-              applyBurn(e, 1, 1.2);
+              if (!isShielded(e)) { e.hp -= 7 * dt; applyBurn(e, 1, 1.2); }
             }
           }
         }
@@ -4145,6 +4131,7 @@ if (btnHomeCustomize){
     return player.glyphPath === p || player.completedGlyphs[p];
   }
   function hasG(path, key){ return !!(player.glyph?.[path]?.[key]); }
+  function isShielded(e){ return !!(e && e.absorbing && (e.type === 'boss' || e.type === 'hearth_warden' || e.type === 'pharaoh_glass' || e.type === 'rime_oracle' || e.type === 'magma_titan' || e.type === 'void' || e.type === 'hollow')); } // warding shield: untouchable by EVERYTHING
 
   function applyBurn(e, stacks=1, dur=3.6){
     e.burnStacks = Math.min(3, (e.burnStacks||0) + stacks);
@@ -4171,10 +4158,8 @@ if (btnHomeCustomize){
     for (const e of ents.enemies){
       const rr = (e.r||16) + r;
       if (dist2(x,y,e.x,e.y) <= rr*rr){
-        e.hp -= (e.absorbing && (e.type === 'boss' || e.type === 'hearth_warden' || e.type === 'pharaoh_glass' || e.type === 'magma_titan' || e.type === 'void' || e.type === 'hollow')) ? 0 : dmg;
-        if (opts.burn) applyBurn(e, 1, 2.6);
-        if (opts.stun) stun(e, opts.stun);
-        if (opts.freeze) freeze(e, opts.freeze);
+        if (isShielded(e)) continue;   // warding shield: no damage and no status effect at all
+        e.hp -= dmg; if (opts.burn) applyBurn(e, 1, 2.6); if (opts.stun) stun(e, opts.stun); if (opts.freeze) freeze(e, opts.freeze);
       }
     }
     if (window.PVP_MODE && window.BOTS_ENABLED && typeof SP_BOTS !== 'undefined'){   // bots are hostile in PvP: glyph blasts hit them too
@@ -4242,7 +4227,7 @@ if (btnHomeCustomize){
     if (player._ballCD <= 0){
       let best=null, bestD2=420*420;
       for (const e of ents.enemies){
-        const d2 = dist2(orb.x,orb.y,e.x,e.y);
+        const d2 = isShielded(e) ? 1e18 : dist2(orb.x,orb.y,e.x,e.y); // ball lightning never targets a shielded warden
         if (d2 < bestD2){ bestD2=d2; best=e; }
       }
       if (best){
@@ -4404,12 +4389,12 @@ if (btnHomeCustomize){
 
   // ----- Per-enemy status tick -----
   function tickEnemyStatuses(e, dt){
-    e.slowMul = 1; if (e.absorbing && (e.type === 'boss' || e.type === 'hearth_warden' || e.type === 'pharaoh_glass' || e.type === 'magma_titan' || e.type === 'void' || e.type === 'hollow')) return;
+    e.slowMul = 1; if (isShielded(e)) return;
 
     // Burn DOT + slow from Hot Coals
     if ((e.burnT||0) > 0){
       e.burnT -= dt;
-      const dps = 4.2 + 2.4*(e.burnStacks||0);
+      const dps = 2.0 + 1.2*(e.burnStacks||0);
       e.hp -= dps*dt;
       if (isPath('fire') && hasG('fire','hotCoals')){
         e.slowMul *= (1 - 0.07*(e.burnStacks||0));
@@ -4520,11 +4505,11 @@ if (btnHomeCustomize){
       s.burnT = Math.max(s.burnT, 3.6);
 
       if (hasG('fire','searingShots') && s.burnStacks > 0){
-        mult *= 1.18;
+        mult *= 1.10;
       }
 
       if (hasG('fire','detonate') && s.burnStacks >= 3){
-        aoeDamage(e.x,e.y,110,24,{col:'#ff6a2a',burn:true,kind:'fire'});
+        aoeDamage(e.x,e.y,110,14,{col:'#ff6a2a',burn:true,kind:'fire'});
         s.burnStacks = 0;
         s.burnT = 0;
       }
@@ -4544,7 +4529,7 @@ if (btnHomeCustomize){
         s.staticPrimed = false;
         s.staticT = 0;
 
-        e.hp -= 14;
+        if (!isShielded(e)) e.hp -= 14;
         addEffect(e.x,e.y,'hit',0.18,'#9fe3ff');
         // ⚡ real bolt from the player into the discharging target
         ents.effects.push({ type:'boltStrike', x1: player.x, y1: player.y, x2: e.x, y2: e.y, life: 0.22, t: 0 });
@@ -4561,7 +4546,7 @@ if (btnHomeCustomize){
             let best=null, bestD2=220*220;
 
             for (const o of ents.enemies){
-              if (o === last) continue;
+              if (o === last || isShielded(o)) continue;
               const d2 = dist2(last.x,last.y,o.x,o.y);
               if (d2 < bestD2){ bestD2=d2; best=o; }
             }
@@ -4668,7 +4653,7 @@ if (btnHomeCustomize){
       if (hasG('fire','volcanicCore')){
         player._killCount = (player._killCount||0) + 1;
         if (player._killCount % 8 === 0){
-          aoeDamage(e.x,e.y, 140, 22, { col:'#ff6a2a', burn:true, kind:'fire' });
+          aoeDamage(e.x,e.y, 140, 12, { col:'#ff6a2a', burn:true, kind:'fire' });
         }
       }
     }
@@ -5500,10 +5485,10 @@ if (btnHomeCustomize){
 
       const e = hitEnemy;
 
-      const dmgBase = b.dmg ?? 10;
+      const dmgBase = isShielded(e) ? 0 : (b.dmg ?? 10);
       const mult = onHitGlyph(e, dmgBase, 'bullet');
 
-      e.hp -= dmgBase * mult; if (b.kind === 'flamethrower') applyBurn(e, 1, 2.6);
+      e.hp -= dmgBase * mult; if (b.kind === 'flamethrower' && !isShielded(e)) applyBurn(e, 1, 2.6);
 
       addEffect(hitX, hitY, 'hit', 0.15, '#fff');
       cam.shake = Math.max(cam.shake, 1.5);
@@ -5639,10 +5624,10 @@ if (btnHomeCustomize){
 // ===============================
 // Glyph overlay system (client) — SCROLLABLE 3D TREE + FULL DESCRIPTIONS
 // ===============================
-const GLYPH_COST_CORE = 1;
-const GLYPH_COST_T1   = 1;
-const GLYPH_COST_T2   = 1;
-const GLYPH_COST_T3   = 1;
+const GLYPH_COST_CORE = 5;
+const GLYPH_COST_T1   = 5;
+const GLYPH_COST_T2   = 10;
+const GLYPH_COST_T3   = 20;
 
 // ---------- Data: full skill names + descriptions ----------
 const GLYPH_CORE = {
@@ -7326,7 +7311,7 @@ window.addEventListener('net:snapshot', (ev) => {
             // offline damage
             
             // offline damage (glyph-aware)
-            e.hp -= (e.absorbing && (e.type === 'boss' || e.type === 'hearth_warden' || e.type === 'pharaoh_glass' || e.type === 'rime_oracle' || e.type === 'magma_titan' || e.type === 'void' || e.type === 'hollow')) ? 0 : DMG * mult;
+            e.hp -= isShielded(e) ? 0 : DMG * mult;
 
             // Soul Bind copy damage
             if (isPath('spirit') && hasG('spirit','soulBind') && player._linkA && player._linkB && player._linkT > 0){
@@ -7643,7 +7628,7 @@ window.addEventListener('net:snapshot', (ev) => {
         dmg *= mult;
       }
 
-      e.hp -= (e.absorbing && (e.type === 'boss' || e.type === 'hearth_warden' || e.type === 'pharaoh_glass' || e.type === 'magma_titan' || e.type === 'void')) ? 0 : dmg; if (b.kind === 'flamethrower') applyBurn(e, 1, 2.6); // 🔥 Flamethrower always burns
+      e.hp -= isShielded(e) ? 0 : dmg; if (b.kind === 'flamethrower' && !isShielded(e)) applyBurn(e, 1, 2.6); // 🔥 Flamethrower burns (never through a warding shield)
       // 🔥 Napalm Trail: drop burning ground on bullet impact
       if (isPath('fire') && hasG('fire','napalmTrail')){
         addWorldVfx({ type:'napalm', x: b.x, y: b.y, r: 60, life: 1.2 });
@@ -7973,7 +7958,7 @@ window.addEventListener('net:snapshot', (ev) => {
       // homing ember: seek nearest enemy and ignite
       let best=null, bestD2=260*260;
       for (const en of ents.enemies){
-        const d2 = dist2(e.x,e.y,en.x,en.y);
+        const d2 = isShielded(en) ? 1e18 : dist2(e.x,e.y,en.x,en.y); // embers never home in on a shielded warden
         if (d2 < bestD2){ bestD2=d2; best=en; }
       }
       if (best){
@@ -8036,7 +8021,7 @@ window.addEventListener('net:snapshot', (ev) => {
       // simple allied shade: chases nearest enemy and hits
       let best=null, bestD2=520*520;
       for (const en of ents.enemies){
-        const d2 = dist2(e.x,e.y,en.x,en.y);
+        const d2 = isShielded(en) ? 1e18 : dist2(e.x,e.y,en.x,en.y); // spirit shades never strike a shielded warden
         if (d2 < bestD2){ bestD2=d2; best=en; }
       }
       if (best){
