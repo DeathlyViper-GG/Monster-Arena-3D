@@ -34,22 +34,26 @@
       return this.join(mode, nickname);
     },
 
-    async join(mode = "pve", nickname = null, team = null) {
+    async join(mode = "pve", nickname = null, team = null, opts = {}) {
       const nick = nickname || localStorage.getItem("arenaNick") || "Player";
       const urlLobby = new URLSearchParams(location.search).get("lobby");
+      const code = (opts.lobbyId || urlLobby || "").trim().toUpperCase();
       const res = await post({
         op: "join", mode, name: nick,
         team: (team === 0 || team === 1) ? team : undefined,
-        lobbyId: urlLobby || undefined
+        lobbyId: code || undefined,
+        create: opts.create === true ? true : undefined
       });
       if (!res || res.error) throw new Error(res?.error || "join failed");
       this.state.lobbyId = res.lobbyId;
       this.state.peerId = res.peerId;
       this.state.myId = res.peerId;
       this.state.team = (res.team === 0 || res.team === 1) ? res.team : null;
+      this.state.isHost = !!res.isHost;
       this.state.meta = {
         lobbyId: res.lobbyId,
         mode: res.mode,
+        isHost: !!res.isHost,
         team: this.state.team,
         joinDeadline: res.startTime,
         levelId: res.levelId ?? null,
@@ -72,6 +76,12 @@
       this.state.meta = { ...(this.state.meta || {}), ...j };
       window.dispatchEvent(new CustomEvent("net:meta", { detail: this.state.meta }));
       return j;
+    },
+
+    // Host-only: launch the lobby the creator is sharing.
+    async start(levelId) {
+      if (!this.state.lobbyId || !this.state.peerId) return { ok:false };
+      return post({ op: "start", lobbyId: this.state.lobbyId, peerId: this.state.peerId, levelId });
     },
 
     async openChest(chestId) {

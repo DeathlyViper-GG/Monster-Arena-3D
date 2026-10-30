@@ -6726,7 +6726,7 @@ function drawGlyphOverlay(){
     const grid=document.getElementById('levelsGrid');if(!grid)return;
     window.RealmSelect.render(grid, LEVELS, async theme=>{
       if(!isNetActive()){applyTheme(theme);}
-      if(window.Net&&Net.state&&Net.state.lobbyId){await Net.setLevel(theme.id);}
+      if(Net?.state?.lobbyId){await Net.setLevel(theme.id);return;}
       const ovLoad=document.getElementById('overlayLoading'),text=document.getElementById('loadingText');if(ovLoad)ovLoad.style.display='grid';
       const deadline=Net?.state?.meta?.joinDeadline||(Date.now()+1500);
       const tick=()=>{const secs=Math.max(0,Math.ceil((deadline-Date.now())/1000));

@@ -620,8 +620,25 @@
 
     <div class="row" style="margin-top:8px;">
       <input id="multiNick" class="input" placeholder="Username" style="width:180px;">
-      <button class="btn" id="joinMultiBtn">▶ Join Lobby</button>
+      <button class="btn" id="createLobbyBtn">✨ Create lobby</button>
       <span id="multiLobbyId" class="chip">—</span>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <input id="mpJoinCode" class="input" placeholder="Lobby code" maxlength="10" autocomplete="off"
+             style="width:180px; text-transform:uppercase; letter-spacing:.18em;">
+      <button class="btn" id="joinLobbyBtn">▶ Join with code</button>
+    </div>
+
+    <div id="mpLobbyPanel" style="display:none; margin-top:12px;">
+      <div class="mp-team-row">
+        <span class="mp-label">Lobby code</span>
+        <span id="mpLobbyCode" class="chip" style="font-size:17px; letter-spacing:.24em;">—</span>
+        <button class="btn" id="mpCopyCode" type="button">Copy code</button>
+        <button class="btn" id="mpCopyLink" type="button">Copy invite link</button>
+      </div>
+      <div id="mpLobbyStatus" class="mp-hint" style="margin-top:8px;">Share the code with your friends.</div>
+      <button class="btn bigBtn" id="mpStartBtn" type="button" style="margin-top:10px; display:none;">▶ Start match</button>
     </div>
 
     <div class="grid mp-mode-grid" style="margin-top:14px;">
@@ -982,7 +999,7 @@
 <script src="js/story_outro_glacial.js?v=3"></script>
 <script src="js/story_outro_cinder.js?v=2"></script>
 <script src="js/story_outro_void.js?v=3"></script>
-<script src="js/story_cutscene_glacial.js?v=5"></script>
+<script src="js/story_cutscene_glacial.js?v=6"></script>
 <script src="js/story_cutscene_cinder.js?v=3"></script>
 <script src="js/story_fragment.js?v=6"></script>
 <script src="js/story_ultimate_cutscene.js?v=5"></script>
@@ -1015,7 +1032,7 @@
 <script src="js/spectate.js?v=2"></script>
 <script src="js/realm_select.js?v=1"></script>
 <script src="js/net_objectives.js?v=1"></script>
-<script src="js/pve16.js?v=story64"></script>
+<script src="js/pve16.js?v=story66"></script>
 <script src="js/teams_mode.js?v=11"></script>
 <script src="js/ctf_mode.js?v=7"></script>
 <script src="js/ctf_minimap.js?v=1"></script>
@@ -1414,49 +1431,120 @@
 
 
 
-  const joinBtn = document.getElementById('joinMultiBtn');
-  if (joinBtn) {
-    joinBtn.onclick = async (e) => {
-      e.preventDefault();
-      e.stopImmediatePropagation();
+  // ---- Lobby codes: create a lobby, share the code, host starts ----
+  const mpEsc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
-
-      if (window.__JOIN_LOCK__) return;
-      window.__JOIN_LOCK__ = true;
-      joinBtn.disabled = true;
-
-      try {
-        const nick = (document.getElementById('multiNick')?.value || '').trim();
-        if (!nick) { alert('Enter a username'); return; }
-
-        localStorage.setItem('arenaNick', nick);
-
-
-        if (!selectedMode) {
-          alert('Select a mode first.');
-          return;
-        }
-
-        const mode = selectedMode;
-
-        console.log('[CLIENT JOIN]', { mode, selectedMode, stored: localStorage.getItem('arenaMode') });
-
-        await Net.join(mode, nick, window.MP_TEAM);
-
-        const idEl = document.getElementById('multiLobbyId');
-        if (idEl) idEl.textContent = Net.state.lobbyId || '—';
-
-        const badge = document.getElementById('lobbyBadge');
-        if (badge) {
-          badge.style.display = 'inline-block';
-          badge.textContent = `Lobby ${Net.state.lobbyId} • ${mode.toUpperCase()}`;
-        }
-      } finally {
-        window.__JOIN_LOCK__ = false;
-        joinBtn.disabled = false;
-      }
-    };
+  function mpNick() {
+    const v = (document.getElementById('multiNick')?.value || '').trim();
+    if (v) localStorage.setItem('arenaNick', v);
+    return v || localStorage.getItem('arenaNick') || 'Player';
   }
+
+  function mpIsHost() {
+    return !!(Net && Net.state && (Net.state.isHost || Net.state.meta?.isHost));
+  }
+
+  function showLobbyPanel() {
+    const code = String(Net?.state?.lobbyId || '');
+    const panel = document.getElementById('mpLobbyPanel');
+    if (panel) panel.style.display = 'block';
+
+    const codeEl = document.getElementById('mpLobbyCode');
+    if (codeEl) codeEl.textContent = code ? code.toUpperCase() : '—';
+
+    const chip = document.getElementById('multiLobbyId');
+    if (chip) chip.textContent = code ? code.toUpperCase() : '—';
+
+    const badge = document.getElementById('lobbyBadge');
+    if (badge && code) {
+      badge.style.display = 'inline-block';
+      badge.textContent = `Lobby ${code.toUpperCase()}`;
+    }
+
+    const startBtn = document.getElementById('mpStartBtn');
+    if (startBtn) startBtn.style.display = mpIsHost() ? 'inline-block' : 'none';
+
+    const status = document.getElementById('mpLobbyStatus');
+    if (status) {
+      status.textContent = mpIsHost()
+        ? 'Share the code, then press Start when everyone is in.'
+        : 'Waiting for the host to start…';
+    }
+  }
+
+  async function mpJoin(opts) {
+    if (window.__JOIN_LOCK__) return;
+    if (!Net) { alert('Networking not ready yet — try again in a second.'); return; }
+    window.__JOIN_LOCK__ = true;
+    try {
+      await Net.join(selectedMode || 'pve', mpNick(), window.MP_TEAM, opts);
+      showLobbyPanel();
+    } catch (err) {
+      alert(err?.message || 'Could not join that lobby.');
+    } finally {
+      window.__JOIN_LOCK__ = false;
+    }
+  }
+
+  document.getElementById('createLobbyBtn')?.addEventListener('click', () => mpJoin({ create: true }));
+
+  document.getElementById('joinLobbyBtn')?.addEventListener('click', () => {
+    const code = (document.getElementById('mpJoinCode')?.value || '').trim().toUpperCase();
+    if (!code) { alert('Enter the lobby code your friend sent you.'); return; }
+    mpJoin({ lobbyId: code });
+  });
+
+  document.getElementById('mpCopyCode')?.addEventListener('click', () => {
+    const code = String(Net?.state?.lobbyId || '');
+    if (code) navigator.clipboard?.writeText(code.toUpperCase());
+  });
+
+  document.getElementById('mpCopyLink')?.addEventListener('click', () => {
+    const code = String(Net?.state?.lobbyId || '');
+    if (code) navigator.clipboard?.writeText(location.origin + '/?lobby=' + code);
+  });
+
+  document.getElementById('mpStartBtn')?.addEventListener('click', async () => {
+    const lvl = parseInt(localStorage.getItem('arenaLevel') || localStorage.getItem('level') || '1', 10) || 1;
+    const btn = document.getElementById('mpStartBtn');
+    if (btn) btn.disabled = true;
+    await Net.start(lvl);
+    if (btn) setTimeout(() => { btn.disabled = false; }, 1200);
+  });
+
+  // Roster + status stay in sync from the authoritative lobby snapshot.
+  window.addEventListener('net:snapshot', (ev) => {
+    const snap = ev.detail || {};
+    const list = Array.isArray(snap.players) ? snap.players : [];
+    const roster = document.getElementById('mpRoster');
+    if (roster && Net?.state?.lobbyId) {
+      roster.innerHTML = list.length
+        ? list.map((p) => '<div class="mp-roster-line"><b>' + mpEsc(p.name) + '</b></div>').join('')
+        : '<div class="mp-hint">Waiting for players…</div>';
+    }
+    const status = document.getElementById('mpLobbyStatus');
+    if (status && Net?.state?.lobbyId && mpIsHost()) {
+      status.textContent = list.length
+        ? list.length + ' in lobby — press Start when ready.'
+        : 'Share the code with your friends.';
+    }
+  });
+
+  // The host pressed Start: the server flips meta.started and every client
+  // drops into the same match together.
+  let _netLaunched = false;
+  window.addEventListener('net:meta', (ev) => {
+    const d = ev.detail || {};
+    if (!Net?.state?.lobbyId) { _netLaunched = false; return; }
+    if (!d.started || _netLaunched) return;
+    _netLaunched = true;
+    if (d.levelId != null) {
+      localStorage.setItem('arenaLevel', String(d.levelId));
+      localStorage.setItem('level', String(d.levelId));
+    }
+    document.querySelectorAll('.overlay').forEach((o) => { o.style.display = 'none'; });
+    document.getElementById('btnRestart')?.click();
+  });
 
 
   function hookLevelGridGuard() {
@@ -1480,15 +1568,15 @@
           Net.state.level = levelId;
         }
       }
+      // Multiplayer: the host picks the map, everyone launches when the host
+      // presses Start — so no local loading/countdown here.
       if (window.MENU_CONTEXT === 'multi') {
         if (!(window.Net && Net.state && Net.state.lobbyId)) {
           e.preventDefault();
           e.stopImmediatePropagation();
-          alert('Join a multiplayer lobby first.');
+          alert('Create or join a lobby first.');
           return;
         }
-
-        showOverlay('overlayLoading');
       }
 
       if (window.MENU_CONTEXT === 'single') {

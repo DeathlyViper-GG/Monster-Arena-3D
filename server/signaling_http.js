@@ -12,7 +12,9 @@ import {
   initBots, updateBots, bakeBotsSnapshot,
   attachHazards, applyEnemyHazards,
   isTeamMode, pickTeam, fillTeamsWithBots, initTeamMatch,
-  tickTeamMatch, resolveTeamBullets, bakeTeamSnapshot, bakeTeamBots
+  tickTeamMatch, resolveTeamBullets, bakeTeamSnapshot, bakeTeamBots,
+  PVE_POINTS, INTERP_DELAY, CONTACT_LAG_MS, pvePointsForType, recordEnemyHist,
+  LOOT_TYPES, spawnEnemyLoot, spawnXpOrbs, lootCountByEnemy, enemyPosAtTime, awardPvEPoint
 } from "./bots.js";
 import { GLYPH_KEYS, makeGlyphState, tickEnemyGlyphStatus, glyphMoveMul, applyGlyphHit, applyGlyphKill, thornmailReflect } from "./glyph.js";
 import cors from "cors";
@@ -128,135 +130,6 @@ const BOSS3_BOMB_SPEED   = 420;   // travel speed of the bomb
 const BOSS3_MAX_TRAVEL   = 320;   // short travel distance cap (px)
 
 // ✅ PvE point table (server authoritative)
-const PVE_POINTS = {
-  ravener: 1,
-  tank: 3,
-  shooter: 4,
-  sniper: 3,
-  bomber: 5,
-  healer: 2,
-  boss: 15
-};
-// ✅ must match client interpolation buffer (~2 ticks)
-const INTERP_DELAY = TICK_MS * 2 / 1000; // ≈ 0.1 seconds
-// Match client snapshot interpolation delay (see getInterpolatedSnapshot(delayMs=120))
-const CONTACT_LAG_MS = 120;
-
-function pvePointsForType(type) {
-  const key = (type === 'chaser' || type === 'swarm') ? 'ravener' : type;
-  return PVE_POINTS[key] || 0;
-}
-
-function recordEnemyHist(e, tNow) {
-  e._hist = e._hist || [];
-  e._hist.push({ t: tNow, x: e.x, y: e.y });
-  // keep last ~10 samples (10*50ms = 500ms history)
-  if (e._hist.length > 10) e._hist.shift();
-}
-
-const LOOT_TYPES = ['health', 'ammo', 'speed', 'shield'];
-
-function spawnEnemyLoot(lobby, x, y, count) {
-  if (!count) return;
-
-  const R_MIN = 18;
-  const R_MAX = 42;
-
-  for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = R_MIN + Math.random() * (R_MAX - R_MIN);
-
-    lobby.pickups.push({
-      x: x + Math.cos(a) * r,
-      y: y + Math.sin(a) * r,
-      r: 14,
-      type: LOOT_TYPES[(Math.random() * LOOT_TYPES.length) | 0]
-    });
-  }
-
-  lobby.pickupVer++;
-}
-// ============================
-// XP ORBS (WHITE ORBS)
-// ============================
-function spawnXpOrbs(lobby, x, y, count = 1) {
-  for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const d = 18 + Math.random() * 24;
-
-    lobby.pickups.push({
-      x: x + Math.cos(a) * d,
-      y: y + Math.sin(a) * d,
-      r: 10,
-      type: 'xp',
-      v: 1,                // ✅ XP value
-      bornAt: now()        // ✅ grace period so it exists visually
-    });
-  }
-
-  lobby.pickupVer++;
-}
-function lootCountByEnemy(type) {
-  switch (type) {
-    case 'chaser':
-    case 'ravener':
-    case 'swarm':
-      return 1;
-
-    case 'tank':
-    case 'shooter':
-    case 'sniper':
-      return 3;
-
-    case 'healer':
-      return 4;
-
-    case 'bomber':
-      return 5;
-
-    case 'boss':
-      return 10;
-
-    default:
-      return 0;
-  }
-}
-
-function enemyPosAtTime(e, tTarget) {
-  const h = e._hist;
-  if (!h || h.length === 0) return { x: e.x, y: e.y };
-
-  // if target before oldest / after newest
-  if (tTarget <= h[0].t) return { x: h[0].x, y: h[0].y };
-  if (tTarget >= h[h.length - 1].t) return { x: h[h.length - 1].x, y: h[h.length - 1].y };
-
-  // find segment [i, i+1] around tTarget
-  for (let i = h.length - 2; i >= 0; i--) {
-    const a = h[i], b = h[i + 1];
-    if (a.t <= tTarget && tTarget <= b.t) {
-      const span = Math.max(1, b.t - a.t);
-      const u = (tTarget - a.t) / span;
-      return {
-        x: a.x + (b.x - a.x) * u,
-        y: a.y + (b.y - a.y) * u
-      };
-    }
-  }
-  // fallback (shouldn’t hit)
-  return { x: h[0].x, y: h[0].y };
-}
-
-function awardPvEPoint(lobby, killerId, enemyType) {
-  if (!lobby || lobby.mode !== 'pve') return;
-  if (!lobby.scores) lobby.scores = new Map();
-  if (!killerId || !lobby.players.has(killerId)) return;
-
-  const pts = pvePointsForType(enemyType);
-  if (!pts) return;
-
-  lobby.scores.set(killerId, (lobby.scores.get(killerId) || 0) + pts);
-}
-
 // -----------------------------------------------------------------------------
 // Difficulty scaling helpers
 // -----------------------------------------------------------------------------
@@ -892,6 +765,9 @@ function createLobby(mode, startTimeOverride = null) {
     created,
     startTime,
     started: false,
+    // A player-created lobby: joined by sharing its code, started by its host.
+    custom: false,
+    hostId: null,
     scores: new Map(),
 
     players: new Map(),
@@ -1013,7 +889,8 @@ function ensureLobby(mode) {
 
   // ✅ pick the newest lobby that is still in its join window
   const open = [...LOBBIES.values()]
-    .filter(l => l.mode === mode && !l.started && t < l.startTime)
+    // never drag a stranger into a private (code) lobby
+    .filter(l => l.mode === mode && !l.started && !l.custom && t < l.startTime)
     .sort((a, b) => b.created - a.created)[0];
 
   if (open) return open;
@@ -1654,9 +1531,17 @@ app.post('/functions/game_server', (req, res) => {
       if (validLobbyOp(body.lobbyId)) {
         lobby = LOBBIES.get(body.lobbyId);
         if (!lobby) return res.status(404).json({ ok:false, error:'Lobby not found' });
+      } else if (body.create === true) {
+        // Host flow: always a brand new lobby that only its code can reach.
+        // It never auto-starts — the host presses Start.
+        lobby = createLobby(mode);
+        lobby.custom = true;
+        lobby.startTime = now() + 86400000;
+        LOBBIES.set(lobby.id, lobby);
       } else {
         lobby = ensureLobby(mode);
       }
+      if (!lobby.hostId && !lobby.players.size) lobby.hostId = peerId;
       if (!lobby.players.has(peerId)) {
         placePlayerInLobby(lobby, peerId, name);
         const p = lobby.players.get(peerId);
@@ -1679,7 +1564,7 @@ app.post('/functions/game_server', (req, res) => {
         lobbyId: lobby.id, peerId, mode: lobby.mode, name,
         startTime: lobby.startTime, world: WORLD,
         levelId: lobby.levelId, mapSeed: lobby.mapSeed,
-        worldKey: lobby.worldKey, isHost: false,
+        worldKey: lobby.worldKey, isHost: lobby.hostId === peerId,
         team
       });
     }
@@ -1779,9 +1664,36 @@ app.post('/functions/game_server', (req, res) => {
       case 'setDesign':
         if (player && Number.isInteger(body.design) && body.design >= 0 && body.design <= 14) player.design = body.design;
         flushWaiters(lobby); return res.json({ ok:true });
+      case 'start': {
+        // Only the host may launch a private lobby.
+        if (lobby.hostId && lobby.hostId !== peerId) return res.status(403).json({ ok:false, error:'Only the host can start' });
+        if (lobby.started) return res.json({ ok:true, already:true, lobbyId: lobby.id });
+        if (lobby.levelId == null) {
+          lobby.levelId = Number.isInteger(body.levelId) ? body.levelId : 1;
+          if (lobby.mapSeed == null) lobby.mapSeed = Math.floor(Math.random() * 2**31);
+          ensureWorldGenerated(lobby);
+          lobby.chestVer++;
+        }
+        lobby.startTime = now();   // the tick loop kicks the match off next pass
+        flushWaiters(lobby);
+        return res.json({ ok:true, lobbyId: lobby.id, levelId: lobby.levelId });
+      }
       case 'setLevel': {
         if (lobby.started) return res.status(409).json({ ok:false, error:'Already started' });
         const lvl = Number.isInteger(body.levelId) ? body.levelId : null;
+        // Private (code) lobbies set their map in place — the code must stay valid.
+        if (lobby.custom) {
+          if (lvl != null && lobby.levelId !== lvl) {
+            lobby.levelId = lvl;
+            lobby.mapSeed = Math.floor(Math.random() * 2**31);
+            lobby.world = null;
+            lobby.worldKey = null;
+            ensureWorldGenerated(lobby);
+            lobby.chestVer++;
+          }
+          flushWaiters(lobby);
+          return res.json({ ok:true, lobbyId: lobby.id, levelId: lobby.levelId, mapSeed: lobby.mapSeed });
+        }
         if (lobby.levelId == null && lvl != null) {
           const p = lobby.players.get(peerId);
           if (!p) return res.status(404).json({ ok:false, error:'Player not found' });
@@ -1869,6 +1781,11 @@ app.post('/functions/game_server', (req, res) => {
         lobby.players.delete(peerId); lobby.inputs.delete(peerId);
         if (lobby.scores) lobby.scores.delete(peerId);
         lobby.bullets = lobby.bullets.filter(b => b.owner !== peerId);
+        // If the host walked out, hand the lobby to the next player.
+        if (lobby.hostId === peerId) {
+          const next = lobby.players.keys().next();
+          lobby.hostId = next.done ? null : next.value;
+        }
         return res.json({ ok:true });
       case 'setWorld':
         return res.json({ ok:true }); // world is server-generated
@@ -2029,7 +1946,10 @@ setInterval(() => {
           levelId: lobby.levelId,
           mapSeed: lobby.mapSeed,
           chestVer: lobby.chestVer ?? 0,
-          worldKey: lobby.worldKey ?? null
+          worldKey: lobby.worldKey ?? null,
+          started: !!lobby.started,
+          hostId: lobby.hostId ?? null,
+          custom: !!lobby.custom
         }
       };
       flushWaiters(lobby);
@@ -2463,7 +2383,10 @@ setInterval(() => {
         mapSeed: lobby.mapSeed,
         pickupVer: lobby.pickupVer ?? 0,
         chestVer: lobby.chestVer ?? 0,
-        worldKey: lobby.worldKey ?? null
+        worldKey: lobby.worldKey ?? null,
+        started: !!lobby.started,
+        hostId: lobby.hostId ?? null,
+        custom: !!lobby.custom
       }
     };
     flushWaiters(lobby);
