@@ -22,6 +22,7 @@ export default function Game() {
   const [casketPlaying, setCasketPlaying] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [hearthIntroPlaying, setHearthIntroPlaying] = useState(false);
+  const [introRealm, setIntroRealm] = useState(1);
   const [deathPlaying, setDeathPlaying] = useState(false);
   const { user, isAuthenticated, authChecked, logout } = useAuth();
 
@@ -79,6 +80,7 @@ export default function Game() {
         setCasketPlaying(true);
       }
       if (data.type === "hearth-warden-intro-start") {
+        setIntroRealm(Number(data.realm) || 1);
         setHearthIntroPlaying(true);
       }
       if (data.type === "player-died") {
@@ -99,8 +101,12 @@ export default function Game() {
 
   const handleHearthIntroDone = useCallback(() => {
     setHearthIntroPlaying(false);
-    postToGame({ type: "hearth-warden-intro-done" });
-  }, [postToGame]);
+    // Resume the game directly in the iframe: a lost postMessage here used to
+    // leave the player stuck on the cutscene with no match starting.
+    const w = iframeRef.current?.contentWindow;
+    if (w?.Story?.resumeRealm) w.Story.resumeRealm(introRealm);
+    else postToGame({ type: "hearth-warden-intro-done", realm: introRealm });
+  }, [introRealm, postToGame]);
 
   const handleDeathRise = useCallback(() => {
     setDeathPlaying(false);

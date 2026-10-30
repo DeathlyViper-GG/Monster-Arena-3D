@@ -553,7 +553,7 @@
         };
         window.addEventListener('message', handler);
         try {
-          window.parent.postMessage({ type: 'hearth-warden-intro-start' }, '*');
+          window.parent.postMessage({ type: 'hearth-warden-intro-start', realm: id }, '*');
         } catch (e2) {
           window.removeEventListener('message', handler);
           window._EXTERNAL_CUTSCENE = false;
@@ -583,14 +583,24 @@
     window.MENU_CONTEXT = 'single';
     window.BOTS_ENABLED = false;
     window.PVP_MODE = false;
+    // Guard against a second launch arriving (message + direct call).
+    if (window._STORY_LAUNCH_T) return;
+    window._STORY_LAUNCH_T = setTimeout(() => { window._STORY_LAUNCH_T = 0; }, 2500);
+    window._EXTERNAL_CUTSCENE = false;
     try { localStorage.setItem('arenaLevel', String(id)); localStorage.setItem('level', String(id)); } catch (e) {}
-    // Hide every menu overlay (story hub included) so the arena is actually
-    // visible once the level-select countdown finishes.
+    // Hide every menu overlay (story hub included) so the arena is visible.
     document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
-    // Realm cards live in #levelsGrid as .realm-card[data-level] (realm_select
-    // / realm_cards). Clicking the real card runs the normal level-select path,
-    // which applies the realm theme and shows the loading countdown before the
-    // match starts.
+    // Start the run straight through the engine: set the realm theme, then run
+    // the normal match reset. This skips the level-select card / countdown /
+    // lobby path, which can stall and leave the player on a dead screen after
+    // the intro cinematic.
+    if (window._Gauntlet && window._Gauntlet.setThemeById && window._Gauntlet.restart) {
+      try {
+        window._Gauntlet.setThemeById(id);
+        window._Gauntlet.restart();
+        return;
+      } catch (e) { /* fall through to the menu path below */ }
+    }
     const card = document.querySelector('#levelsGrid [data-level="' + id + '"]');
     if (card) { card.click(); }
     else { document.getElementById('btnRestart')?.click(); }
@@ -667,5 +677,11 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 
-  window.Story = { startRealm, showHub, buildHub, isUnlocked, isCompleted, REALMS, showEndingChoice, showFateChoice };
+  // Called directly by the React host when its cutscene overlay closes, so the
+  // match starts even if the postMessage hand-off is missed.
+  function resumeRealm(id) {
+    launchArena(id || window.STORY_REALM || 1);
+  }
+
+  window.Story = { startRealm, showHub, buildHub, isUnlocked, isCompleted, REALMS, showEndingChoice, showFateChoice, resumeRealm };
 })();
