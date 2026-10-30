@@ -5,6 +5,7 @@ import { hydrateProgress, uploadProgress } from "@/lib/cloudSync";
 import CursedCasketScene from "@/components/casketCutscene/CasketScene";
 import CasketDialogue from "@/components/casketCutscene/CasketDialogue";
 import HearthWardenIntroStage from "@/components/hearthWardenIntro/HearthWardenIntroStage";
+import GlacialArchiveStage from "@/components/glacialArchive/GlacialArchiveStage";
 import DeathScreen from "@/components/deathScreen/DeathScreen";
 
 // Hosts the real Monster Arena game (vanilla JS 3D client in /game.html) full-screen.
@@ -22,6 +23,7 @@ export default function Game() {
   const [casketPlaying, setCasketPlaying] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [hearthIntroPlaying, setHearthIntroPlaying] = useState(false);
+  const [glacialPlaying, setGlacialPlaying] = useState(false);
   const [introRealm, setIntroRealm] = useState(1);
   const [deathPlaying, setDeathPlaying] = useState(false);
   const { user, isAuthenticated, authChecked, logout } = useAuth();
@@ -83,6 +85,12 @@ export default function Game() {
         setIntroRealm(Number(data.realm) || 1);
         setHearthIntroPlaying(true);
       }
+      if (data.type === "glacial-archive-start") {
+        setGlacialPlaying(true);
+        // Acknowledge immediately so the game knows the host is playing the
+        // 3D cutscene instead of falling back to its 2D version.
+        postToGame({ type: "glacial-archive-ack" });
+      }
       if (data.type === "player-died") {
         setDeathPlaying(true);
       }
@@ -105,8 +113,15 @@ export default function Game() {
     // leave the player stuck on the cutscene with no match starting.
     const w = iframeRef.current?.contentWindow;
     if (w?.Story?.resumeRealm) w.Story.resumeRealm(introRealm);
-    else postToGame({ type: "hearth-warden-intro-done", realm: introRealm });
+    // Belt and braces: the message is the game's own resume path and is
+    // ignored if the direct call already started the match.
+    postToGame({ type: "hearth-warden-intro-done", realm: introRealm });
   }, [introRealm, postToGame]);
+
+  const handleGlacialDone = useCallback(() => {
+    setGlacialPlaying(false);
+    postToGame({ type: "glacial-archive-done" });
+  }, [postToGame]);
 
   const handleDeathRise = useCallback(() => {
     setDeathPlaying(false);
@@ -155,6 +170,7 @@ export default function Game() {
         </div>
       )}
       {hearthIntroPlaying && <HearthWardenIntroStage onDone={handleHearthIntroDone} />}
+      {glacialPlaying && <GlacialArchiveStage onDone={handleGlacialDone} />}
       {deathPlaying && (
         <div className="fixed inset-0 z-[110] bg-black">
           <DeathScreen onRise={handleDeathRise} onHome={handleDeathHome} />

@@ -212,13 +212,49 @@
     env.grade('rgba(80,160,220,1)', 0.2, 'soft-light'); env.grade('rgba(10,20,50,1)', 0.12, 'multiply'); env.grain(0.06);
   }
 
-  function play(script, opts) {
+  // The realm 3 intro is the full 3D "Glacial Archive" cinematic (three.js),
+  // played by the host app over the game. Ask the host for it; when no host
+  // answers (standalone page / older host) fall back to this canvas version.
+  function playCanvas(script, done) {
     makeParticles();
     Cinematic.play({
       prefix: 'Glacial', accent: '#9fe3ff',
       beats: script, beatScenes: [0, 1, 2],
-      buildBackdrop, render, post, onDone: (opts && opts.onDone) || function () {}
+      buildBackdrop, render, post, onDone: done
     });
+  }
+
+  function play(script, opts) {
+    const done = (opts && opts.onDone) || function () {};
+    const host = (window.parent && window.parent !== window) ? window.parent : null;
+    if (!host) { playCanvas(script, done); return; }
+
+    let acked = false;
+    function onMsg(e) {
+      const d = e.data || {};
+      if (d.type === 'glacial-archive-ack') {
+        acked = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
+      } else if (d.type === 'glacial-archive-done') {
+        window.removeEventListener('message', onMsg);
+        clearTimeout(timer);
+        done();
+      }
+    }
+    const timer = setTimeout(function () {
+      if (acked) return;
+      window.removeEventListener('message', onMsg);
+      playCanvas(script, done);
+    }, 900);
+
+    window.addEventListener('message', onMsg);
+    try { host.postMessage({ type: 'glacial-archive-start' }, '*'); }
+    catch (_) {
+      window.removeEventListener('message', onMsg);
+      clearTimeout(timer);
+      playCanvas(script, done);
+    }
   }
   window.GlacialCutscene = { play, done: () => Cinematic.done() };
 })();
