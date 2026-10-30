@@ -584,7 +584,14 @@
     window.BOTS_ENABLED = false;
     window.PVP_MODE = false;
     try { localStorage.setItem('arenaLevel', String(id)); localStorage.setItem('level', String(id)); } catch (e) {}
-    const card = document.querySelector('.levelCard[data-level="' + id + '"]');
+    // Hide every menu overlay (story hub included) so the arena is actually
+    // visible once the level-select countdown finishes.
+    document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+    // Realm cards live in #levelsGrid as .realm-card[data-level] (realm_select
+    // / realm_cards). Clicking the real card runs the normal level-select path,
+    // which applies the realm theme and shows the loading countdown before the
+    // match starts.
+    const card = document.querySelector('#levelsGrid [data-level="' + id + '"]');
     if (card) { card.click(); }
     else { document.getElementById('btnRestart')?.click(); }
   }
