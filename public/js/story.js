@@ -598,6 +598,12 @@
       try {
         window._Gauntlet.setThemeById(id);
         window._Gauntlet.restart();
+        // restart() only clears the home/pause/victory panels, so sweep every
+        // remaining menu panel (story hub, "Preparing match" card) or they sit
+        // on top of the running arena.
+        document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none');
+        const load = document.getElementById('overlayLoading');
+        if (load) load.style.display = 'none';
         return;
       } catch (e) { /* fall through to the menu path below */ }
     }

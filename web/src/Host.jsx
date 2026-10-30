@@ -58,8 +58,8 @@ export default function Host() {
     // Resume the game directly in the iframe (message hand-off alone could be
     // missed and leave the player stuck on the cutscene).
     const w = iframeRef.current?.contentWindow;
-    if (w?.Story?.resumeRealm) w.Story.resumeRealm(introRealm);
-    else postToGame({ type: 'hearth-warden-intro-done', realm: introRealm });
+if (w?.Story?.resumeRealm) w.Story.resumeRealm(introRealm);
+postToGame({ type: 'hearth-warden-intro-done', realm: introRealm });
   }, [introRealm, postToGame]);
 
   const handleDeathRise = useCallback(() => {
