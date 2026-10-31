@@ -105,6 +105,35 @@
         ctx.restore();
       }
     }
+
+    // Floating team markers (2D path): vibrant blue / dark red, always above
+    // the unit's head so both sides read at a glance.
+    const selfId = window.Net?.state?.peerId;
+    const mark = (x, y, team, label) => {
+      const sp = toS(x, y);
+      const c = team === 0 ? '#3aa6ff' : '#c1121f';
+      const deep = team === 0 ? 'rgba(9,38,104,.92)' : 'rgba(58,4,8,.93)';
+      const bob = Math.sin(t * 3 + x * 0.01) * 4;
+      ctx.save();
+      ctx.translate(sp.x, sp.y - 58 + bob);
+      ctx.beginPath();
+      ctx.moveTo(0, -10); ctx.lineTo(9, 0); ctx.lineTo(0, 10); ctx.lineTo(-9, 0);
+      ctx.closePath();
+      ctx.fillStyle = deep; ctx.fill();
+      ctx.strokeStyle = c; ctx.lineWidth = 2.4; ctx.shadowColor = c; ctx.shadowBlur = 12; ctx.stroke();
+      if (label) {
+        ctx.shadowBlur = 0; ctx.fillStyle = c;
+        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(label, 0, 22);
+      }
+      ctx.restore();
+    };
+    for (const p of (s.players || [])) {
+      if (p && p.id !== selfId && (p.team === 0 || p.team === 1) && (p.hp ?? 1) > 0) mark(p.x, p.y, p.team, p.name || '');
+    }
+    for (const b of (s.bots || [])) {
+      if (b && (b.team === 0 || b.team === 1) && (b.hp ?? 1) > 0) mark(b.x, b.y, b.team, '');
+    }
   }
 
   // Team modes respawn their players: a dead player must wait for the server

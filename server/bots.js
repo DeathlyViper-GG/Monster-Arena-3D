@@ -658,9 +658,7 @@ export function tickTeamMatch(lobby, dt, move) {
 // existing 2D and 3D renderers draw the objectives with no changes.
 export function bakeTeamSnapshot(lobby) {
   const out = {};
-  // Each mode only ships its own objectives, so a CTF lobby never renders
-  // titans / golems and a Teams lobby never renders flags.
-  if (lobby.mode === 'teams' && lobby.giants && lobby.giants.length) {
+  if (lobby.giants && lobby.giants.length) {
     out.teams = {
       giants: lobby.giants.map((g) => ({
         team: g.team, x: g.x, y: g.y, r: g.r,
@@ -678,7 +676,7 @@ export function bakeTeamSnapshot(lobby) {
       playerTeam: 0
     };
   }
-  if (lobby.mode === 'ctf' && lobby.ctf) {
+  if (lobby.ctf) {
     out.ctf = {
       bases: lobby.ctf.bases.map((b) => ({ team: b.team, x: b.x, y: b.y, r: b.r })),
       flags: lobby.ctf.flags.map((f) => ({ team: f.team, x: f.x, y: f.y, state: f.state, bob: f.bob })),
@@ -694,14 +692,19 @@ export function bakeTeamSnapshot(lobby) {
 
 // Team bots need their side in the snapshot so the client colours them.
 export function bakeTeamBots(lobby) {
-  return (lobby.bots || []).map((b) => ({
+  return (lobby.bots || []).map((b, i) => ({
     id: b.id,
     name: b.name,
     x: b.x,
     y: b.y,
     ang: b.ang,
     hp: b.hp,
-    team: b.team
+    team: b.team,
+    // Per-slot look so a side fields varied bodies, colours and weapons
+    // instead of ten identical clones.
+    design: (i + (b.team || 0)) % 4,
+    color: (i * 3 + (b.team || 0)) % 8,
+    weapon: (i * 2 + (b.team || 0)) % 3
   }));
 }
 

@@ -427,8 +427,8 @@
       const w = F.weapons[b.weapon ?? 0]; const gi = w.kind === 'pistol' ? F.gunSheets.pistols[b.guns?.pistol ?? -1] : w.kind === 'rifle' ? F.gunSheets.rifles[b.guns?.rifle ?? -1] : F.gunSheets.shotguns[b.guns?.shotgun ?? -1];
       const o = { kind: w.kind, gunImg: gi, ph: idHash(b) * 6 }; avatar(b.x, b.y, b.ang || 0, 18, b.design ?? 0, col, tt, o);
       const hp = clamp((b.hp ?? 100) / 100, 0, 1); ring(b.x, b.y, 26, [.9, .9, .9], .12, 7, 0, 1.3); R.decal(b.x, b.y, 26, .4, 1.6, .4, .95, 6, hp, 0, true, 1.7);
-      if (window.TEAMS_MODE && b.team != null) { const tc = (b.team === 0) ? [.23, .65, 1] : [1, .29, .29]; ring(b.x, b.y, 31, tc, .95, 9, tt * (b.team ? -1 : 1), 1.7); R.glow(b.x, 2, b.y, 40, tc[0], tc[1], tc[2], .25, 0);
-        const bh = 50 + Math.sin(tt * 3 + (b.id||'').length) * 3; R.glow(b.x, bh, b.y, 26, tc[0]*2, tc[1]*2, tc[2]*2, .85, 0); R.draw(U().sphere, mm(b.x, bh, b.y, tt*2, 5, 7, 5), mat(tc, { emissive: [tc[0]*3, tc[1]*3, tc[2]*3], shadow: false })); R.light(b.x, b.y, bh, 120, tc[0], tc[1], tc[2], .6); }
+      if (window.TEAMS_MODE && b.team != null) { const tc = (b.team === 0) ? [.28, .68, 1.8] : [.85, .06, .10]; ring(b.x, b.y, 31, tc, .95, 9, tt * (b.team ? -1 : 1), 1.7); R.glow(b.x, 2, b.y, 40, tc[0], tc[1], tc[2], .25, 0);
+        const bh = 62 + Math.sin(tt * 3 + (b.id||'').length) * 3; R.glow(b.x, bh, b.y, 26, tc[0]*2, tc[1]*2, tc[2]*2, .85, 0); R.draw(U().sphere, mm(b.x, bh, b.y, tt*2, 5, 7, 5), mat(tc, { emissive: [tc[0]*3, tc[1]*3, tc[2]*3], shadow: false })); R.light(b.x, b.y, bh, 120, tc[0], tc[1], tc[2], .6); }
       R.light(b.x, b.y, 30, 180, .5, .6, .8, .3);
       botAura(b, tt);
       // statuses the player's glyphs put on this bot (burning, drenched, frozen, stunned)
@@ -437,7 +437,16 @@
       const w = F.weapons[rp.weapon ?? 0]; const g = rp.guns || { pistol: -1, rifle: -1, shotgun: -1 };
       const gi = w.kind === 'pistol' && g.pistol >= 0 ? F.gunSheets.pistols[g.pistol] : w.kind === 'rifle' && g.rifle >= 0 ? F.gunSheets.rifles[g.rifle] : w.kind === 'shotgun' && g.shotgun >= 0 ? F.gunSheets.shotguns[g.shotgun] : null;
       avatar(rp.x, rp.y, rp.ang || 0, rp.r || 16, rp.design | 0, col, tt, { kind: w.kind, gunImg: gi, ph: idHash(rp) * 6 });
-      R.light(rp.x, rp.y, 30, 180, .5, .6, .8, .3); }
+      R.light(rp.x, rp.y, 30, 180, .5, .6, .8, .3);
+      // Floating team marker: vibrant blue for blue team, dark red for red.
+      if (rp.team === 0 || rp.team === 1) { const tc = (rp.team === 0) ? [.28, .68, 1.8] : [.85, .06, .10]; const core = (rp.team === 0) ? [.09, .28, .95] : [.26, .01, .03];
+        ring(rp.x, rp.y, 30, tc, .9, 9, tt * (rp.team ? -1 : 1), 1.7);
+        const bh = 62 + Math.sin(tt * 3 + (rp.id || '').length) * 3;
+        R.glow(rp.x, 2, rp.y, 38, tc[0], tc[1], tc[2], .28, 0);
+        R.glow(rp.x, bh, rp.y, 28, tc[0], tc[1], tc[2], .9, 0);
+        R.draw(U().sphere, mm(rp.x, bh, rp.y, tt * 2, 6, 8, 6), mat(tc, { emissive: [tc[0] * 2.4, tc[1] * 2.4, tc[2] * 2.4], shadow: false }));
+        R.draw(U().sphere, mm(rp.x, bh - 14, rp.y, tt * 1.5, 4, 6, 4), mat(core, { emissive: core, shadow: false }));
+        R.light(rp.x, rp.y, bh, 110, tc[0], tc[1], tc[2], .5); } }
   }
 
   // --------------------------------------------------------------- bullets
