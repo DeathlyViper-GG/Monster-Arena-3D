@@ -80,12 +80,14 @@ export default function Host() {
 
   return (
     <>
+      {/* Sizing is set inline as well as by class, so the game can never
+          collapse into a default 300×150 box if the stylesheet fails. */}
       <iframe
         ref={iframeRef}
         src={`/game.html${qs}`}
         title="Monster Arena"
         className="fixed inset-0 w-full h-full"
-        style={{ border: 0 }}
+        style={{ border: 0, position: 'fixed', inset: 0, width: '100%', height: '100%' }}
         allow="autoplay; fullscreen; gamepad"
       />
       {casketPlaying && (

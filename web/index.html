@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Monster Arena</title>
+  <!-- Tailwind pipeline for the host: every cutscene overlay and the game
+       iframe are positioned with utility classes, so this MUST be bundled. -->
+  <link rel="stylesheet" href="/src/host.css" />
   <style>
     html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%; overscroll-behavior: none; }
     #root { width: 100vw; height: 100vh; }
