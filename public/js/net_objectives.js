@@ -10,6 +10,17 @@
 
   function snapRaw() { return window.Net?.state?.snapshot || null; }
 
+  // The lobby's mode is the authority on which objectives exist. A Teams match
+  // must never draw CTF bases / the flag score, and vice versa — even if a
+  // stale payload survived a mode switch on the server.
+  function modeOf(s) {
+    const m = (s && (s.mode || (s.meta && s.meta.mode)))
+      || (window.Net && window.Net.state && window.Net.state.meta && window.Net.state.meta.mode)
+      || localStorage.getItem('arenaMode')
+      || 'pve';
+    return String(m).toLowerCase();
+  }
+
   function myTeam() {
     const s = snapRaw();
     const id = window.Net?.state?.peerId;
@@ -31,20 +42,24 @@
       }
     }
 
-    F.teams = (window.TEAMS_MODE && window.Teams) ? window.Teams.snapshot() : null;
-    if (!F.teams && s && s.teams) {
+    const mode = modeOf(s);
+
+    F.teams = (mode === 'teams' && window.TEAMS_MODE && window.Teams) ? window.Teams.snapshot() : null;
+    if (!F.teams && mode === 'teams' && s && s.teams) {
       F.teams = s.teams;
       F.teams.playerTeam = mine == null ? 0 : mine;
     }
+    if (mode !== 'teams') F.teams = null;
 
-    F.ctf = (window.CTF_MODE && window.CTF) ? window.CTF.snapshot() : null;
-    if (!F.ctf && s && s.ctf) {
+    F.ctf = (mode === 'ctf' && window.CTF_MODE && window.CTF) ? window.CTF.snapshot() : null;
+    if (!F.ctf && mode === 'ctf' && s && s.ctf) {
       F.ctf = s.ctf;
       F.ctf.playerTeam = mine == null ? 0 : mine;
       const id = window.Net?.state?.peerId;
       const me = (s.players || []).find((p) => p.id === id);
       F.ctf.playerCarrying = !!(me && me.carrying);
     }
+    if (mode !== 'ctf') F.ctf = null;
   }
 
   function draw2D(ctx, cam) {
@@ -55,7 +70,7 @@
     const col = (team) => (team === mine ? '#3aa6ff' : '#ff4a4a');
     const toS = (x, y) => ({ x: x - cam.x - cam.sx, y: y - cam.y - cam.sy });
 
-    if (s.teams && Array.isArray(s.teams.giants)) {
+    if (modeOf(s) === 'teams' && s.teams && Array.isArray(s.teams.giants)) {
       for (const g of s.teams.giants) {
         const p = toS(g.x, g.y), c = col(g.team);
         ctx.save();
@@ -89,7 +104,7 @@
       }
     }
 
-    if (s.ctf) {
+    if (modeOf(s) === 'ctf' && s.ctf) {
       for (const b of (s.ctf.bases || [])) {
         const p = toS(b.x, b.y), c = col(b.team);
         ctx.save(); ctx.strokeStyle = c; ctx.globalAlpha = 0.5; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);

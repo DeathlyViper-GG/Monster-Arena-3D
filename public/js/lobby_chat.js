@@ -93,14 +93,19 @@
   // ------------------------------------------------------------- objectives
   function renderObjective(s) {
     if (!objectiveEl) return;
-    const show = s && (s.teams || s.ctf);
-    if (!show) { objectiveEl.style.display = 'none'; return; }
+    // The lobby's mode decides which objective readout exists: a Teams match
+    // shows titans only, a CTF match shows the flag score only. Anything else
+    // means a stale payload from a previous mode reached us — ignore it.
+    const mode = String(s?.mode || s?.meta?.mode || window.Net?.state?.meta?.mode || localStorage.getItem('arenaMode') || 'pve').toLowerCase();
+    const teams = mode === 'teams' ? s.teams : null;
+    const ctf = mode === 'ctf' ? s.ctf : null;
+    if (!teams && !ctf) { objectiveEl.style.display = 'none'; return; }
     const mine = myTeam();
     const mineLabel = mine == null ? 'SPECTATOR' : TEAM_NAME[mine];
     let html = '<div class="obj-mine">YOU · <b class="' + (mine === 0 ? 'mp-blue' : 'mp-red') + '">' + mineLabel + '</b></div>';
 
-    if (s.teams && s.teams.giants) {
-      for (const g of s.teams.giants) {
+    if (teams && teams.giants) {
+      for (const g of teams.giants) {
         const pct = Math.max(0, Math.min(1, g.hp / (g.maxhp || 1)));
         html += '<div class="obj-giant ' + (g.team === 0 ? 'obj-blue' : 'obj-red') + '">'
           + '<span>' + esc(g.name || TEAM_NAME[g.team] + ' TITAN') + '</span>'
@@ -108,21 +113,21 @@
           + '</div>';
       }
     }
-    if (s.ctf) {
-      html += '<div class="obj-score"><span class="mp-blue">BLUE ' + s.ctf.scores[0] + '</span>'
+    if (ctf) {
+      html += '<div class="obj-score"><span class="mp-blue">BLUE ' + ctf.scores[0] + '</span>'
         + '<span class="obj-dash">—</span>'
-        + '<span class="mp-red">' + s.ctf.scores[1] + ' RED</span>'
+        + '<span class="mp-red">' + ctf.scores[1] + ' RED</span>'
         + '<span class="obj-target">first to 5</span></div>';
-      const enemyFlag = s.ctf.flags ? s.ctf.flags.find((f) => f.team !== mine) : null;
+      const enemyFlag = ctf.flags ? ctf.flags.find((f) => f.team !== mine) : null;
       if (enemyFlag) {
         const where = enemyFlag.state === 'carried' ? 'CARRIED' : enemyFlag.state === 'dropped' ? 'DROPPED' : 'AT BASE';
         html += '<div class="obj-flag">Enemy flag: ' + where + '</div>';
       }
     }
-    if (s.ctf && s.ctf.over) {
-      html += '<div class="obj-over">' + (s.ctf.winner === mine ? 'VICTORY' : 'DEFEAT') + '</div>';
-    } else if (s.teams && s.teams.over) {
-      html += '<div class="obj-over">' + (s.teams.winner === mine ? 'VICTORY' : 'DEFEAT') + '</div>';
+    if (ctf && ctf.over) {
+      html += '<div class="obj-over">' + (ctf.winner === mine ? 'VICTORY' : 'DEFEAT') + '</div>';
+    } else if (teams && teams.over) {
+      html += '<div class="obj-over">' + (teams.winner === mine ? 'VICTORY' : 'DEFEAT') + '</div>';
     }
     objectiveEl.innerHTML = html;
     objectiveEl.style.display = 'block';
