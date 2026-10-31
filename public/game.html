@@ -1003,7 +1003,7 @@
 <script src="js/story_cutscene_cinder.js?v=3"></script>
 <script src="js/story_fragment.js?v=6"></script>
 <script src="js/story_ultimate_cutscene.js?v=5"></script>
-<script src="js/story.js?v=18"></script>
+<script src="js/story.js?v=19"></script>
 <script src="js/boss_death_cutscene.js?v=4"></script>
 <script src="js/boss_stage_cutscene.js?v=3"></script>
 <script src="js/boss_hearth_warden.js?v=11"></script>
@@ -1489,6 +1489,13 @@
     window.PVP_MODE = (m === 'pvp' || m === 'teams' || m === 'ctf');
     window.TEAMS_MODE = (m === 'teams');
     window.CTF_MODE = (m === 'ctf');
+    // Online matches are server-run: the lobby's bots arrive in the snapshot,
+    // so no local practice bots may be spawned on top of them.
+    window.BOTS_ENABLED = false;
+    // Clear the engine of every mode that is not being played, so titans from
+    // a previous Teams match (or flags from a CTF one) never bleed through.
+    if (!window.TEAMS_MODE && window.Teams && window.Teams.reset) window.Teams.reset();
+    if (!window.CTF_MODE && window.CTF && window.CTF.reset) window.CTF.reset();
     document.body.classList.toggle('mode-pvp', window.PVP_MODE);
     document.body.classList.toggle('mode-pve', !window.PVP_MODE);
   }
@@ -1618,8 +1625,9 @@
     if (!Net?.state?.lobbyId) { _netLaunched = false; applyLobbyRole(); return; }
     if (!d.started || _netLaunched) return;
     _netLaunched = true;
-    // The host's chosen mode is what gets played.
-    applyNetMode(d.mode);
+    // The host's chosen mode is what gets played (the lobby snapshot is the
+    // authority; the meta field alone used to fall back to PvE).
+    applyNetMode(d.mode || Net?.state?.snapshot?.mode || Net?.state?.meta?.mode);
     if (d.levelId != null) {
       localStorage.setItem('arenaLevel', String(d.levelId));
       localStorage.setItem('level', String(d.levelId));

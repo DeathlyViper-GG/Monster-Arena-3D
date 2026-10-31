@@ -144,17 +144,25 @@
   const BY_ID = {}; REALMS.forEach(r => BY_ID[r.id] = r);
   const KEY = 'arena_story_progress';
 
+  // Testing switch: every realm is selectable so each chapter's intro, arena
+  // and boss can be checked without replaying the campaign. Set to false to
+  // restore seal-by-seal progression.
+  const UNLOCK_ALL_REALMS = true;
+
   function load() {
     const def = { unlocked: [1], completed: [], prologueSeen: false, ending: null };
+    let p = def;
     try {
-      const p = JSON.parse(localStorage.getItem(KEY)) || {};
-      return {
-        unlocked: Array.isArray(p.unlocked) ? p.unlocked : def.unlocked,
-        completed: Array.isArray(p.completed) ? p.completed : def.completed,
-        prologueSeen: !!p.prologueSeen,
-        ending: p.ending || null
+      const raw = JSON.parse(localStorage.getItem(KEY)) || {};
+      p = {
+        unlocked: Array.isArray(raw.unlocked) ? raw.unlocked : [1],
+        completed: Array.isArray(raw.completed) ? raw.completed : [],
+        prologueSeen: !!raw.prologueSeen,
+        ending: raw.ending || null
       };
-    } catch (e) { return def; }
+    } catch (e) { p = def; }
+    if (UNLOCK_ALL_REALMS) p.unlocked = REALMS.map((r) => r.id);
+    return p;
   }
   function save(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
   function isUnlocked(id) { return load().unlocked.indexOf(id) >= 0; }

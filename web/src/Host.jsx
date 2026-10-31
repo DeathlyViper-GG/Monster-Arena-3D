@@ -4,11 +4,11 @@
 // supports). The game iframe posts the three cinematic cutscene triggers;
 // this host overlays the identical React + three.js cutscenes so Story mode
 // and the death screen play exactly as they do on the Base44 link.
-import './host.css';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import CursedCasketScene from '@/components/casketCutscene/CasketScene';
 import CasketDialogue from '@/components/casketCutscene/CasketDialogue';
 import HearthWardenIntroStage from '@/components/hearthWardenIntro/HearthWardenIntroStage';
+import GlacialArchiveStage from '@/components/glacialArchive/GlacialArchiveStage';
 import DeathScreen from '@/components/deathScreen/DeathScreen';
 
 export default function Host() {
@@ -16,7 +16,7 @@ export default function Host() {
   const [casketPlaying, setCasketPlaying] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [hearthIntroPlaying, setHearthIntroPlaying] = useState(false);
-  const [introRealm, setIntroRealm] = useState(1);
+  const [glacialPlaying, setGlacialPlaying] = useState(false);
   const [deathPlaying, setDeathPlaying] = useState(false);
 
   useEffect(() => { document.title = 'Monster Arena'; }, []);
@@ -38,15 +38,18 @@ export default function Host() {
         setRestartToken((t) => t + 1);
         setCasketPlaying(true);
       }
-      if (data.type === 'hearth-warden-intro-start') {
-        setIntroRealm(Number(data.realm) || 1);
-        setHearthIntroPlaying(true);
+      if (data.type === 'hearth-warden-intro-start') setHearthIntroPlaying(true);
+      if (data.type === 'glacial-archive-start') {
+        setGlacialPlaying(true);
+        // Acknowledge at once so the game plays this 3D cutscene instead of
+        // falling back to its 2D canvas version.
+        postToGame({ type: 'glacial-archive-ack' });
       }
       if (data.type === 'player-died') setDeathPlaying(true);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [postToGame]);
 
   const handleLoop = useCallback(() => {
     setCasketPlaying(false);
@@ -55,12 +58,13 @@ export default function Host() {
 
   const handleHearthIntroDone = useCallback(() => {
     setHearthIntroPlaying(false);
-    // Resume the game directly in the iframe (message hand-off alone could be
-    // missed and leave the player stuck on the cutscene).
-    const w = iframeRef.current?.contentWindow;
-if (w?.Story?.resumeRealm) w.Story.resumeRealm(introRealm);
-postToGame({ type: 'hearth-warden-intro-done', realm: introRealm });
-  }, [introRealm, postToGame]);
+    postToGame({ type: 'hearth-warden-intro-done' });
+  }, [postToGame]);
+
+  const handleGlacialDone = useCallback(() => {
+    setGlacialPlaying(false);
+    postToGame({ type: 'glacial-archive-done' });
+  }, [postToGame]);
 
   const handleDeathRise = useCallback(() => {
     setDeathPlaying(false);
@@ -81,11 +85,11 @@ postToGame({ type: 'hearth-warden-intro-done', realm: introRealm });
         src={`/game.html${qs}`}
         title="Monster Arena"
         className="fixed inset-0 w-full h-full"
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', border: 0, zIndex: 0, background: '#000' }}
+        style={{ border: 0 }}
         allow="autoplay; fullscreen; gamepad"
       />
       {casketPlaying && (
-        <div className="fixed inset-0 z-[100] bg-black" style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#000' }}>
+        <div className="fixed inset-0 z-[100] bg-black">
           <CursedCasketScene playing restartToken={restartToken} onLoop={handleLoop} />
           <button
             onClick={() => handleLoop()}
@@ -100,8 +104,9 @@ postToGame({ type: 'hearth-warden-intro-done', realm: introRealm });
         </div>
       )}
       {hearthIntroPlaying && <HearthWardenIntroStage onDone={handleHearthIntroDone} />}
+      {glacialPlaying && <GlacialArchiveStage onDone={handleGlacialDone} />}
       {deathPlaying && (
-        <div className="fixed inset-0 z-[110] bg-black" style={{ position: 'fixed', inset: 0, zIndex: 110, background: '#000' }}>
+        <div className="fixed inset-0 z-[110] bg-black">
           <DeathScreen onRise={handleDeathRise} onHome={handleDeathHome} />
         </div>
       )}

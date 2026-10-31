@@ -658,7 +658,9 @@ export function tickTeamMatch(lobby, dt, move) {
 // existing 2D and 3D renderers draw the objectives with no changes.
 export function bakeTeamSnapshot(lobby) {
   const out = {};
-  if (lobby.giants && lobby.giants.length) {
+  // Each mode only ships its own objectives, so a CTF lobby never renders
+  // titans / golems and a Teams lobby never renders flags.
+  if (lobby.mode === 'teams' && lobby.giants && lobby.giants.length) {
     out.teams = {
       giants: lobby.giants.map((g) => ({
         team: g.team, x: g.x, y: g.y, r: g.r,
@@ -676,7 +678,7 @@ export function bakeTeamSnapshot(lobby) {
       playerTeam: 0
     };
   }
-  if (lobby.ctf) {
+  if (lobby.mode === 'ctf' && lobby.ctf) {
     out.ctf = {
       bases: lobby.ctf.bases.map((b) => ({ team: b.team, x: b.x, y: b.y, r: b.r })),
       flags: lobby.ctf.flags.map((f) => ({ team: f.team, x: f.x, y: f.y, state: f.state, bob: f.bob })),
